@@ -848,7 +848,11 @@ pub impl Show for TopFuncDef with output(self, logger) {
     None => "";
   }
   let params_str = self.params.map(p => "\{p.0}: \{p.1}").join(", ");
-  logger.write_string("fn\{generic_str} \{self.name}(\{params_str}) -> \{self.ret_ty} ");
+  if self.name != "main" {
+    logger.write_string("fn\{generic_str} \{self.name}(\{params_str}) -> \{self.ret_ty} ");
+  } else {
+    logger.write_string("fn main ");
+  }
   logger.write_string(self.body.to_string());
 }
 
