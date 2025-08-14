@@ -14,4 +14,6 @@ fn main {
   for i in 0..<5 {
     println(ast_gen.gen_enum_def())
   }
+
+  println(ast_gen.gen_top_func_def())
 }

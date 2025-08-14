@@ -55,6 +55,7 @@ pub(all) struct RandAstGenerator {
   let_tuple_max_bindings: Int
   ty_env: Env[Upper, Type]
   id_env: Env[Ident, Type]
+  mutable_id_env: Env[Ident, Type]
   mut generic: Upper?
 
   mut curr_block : BlockExpr?
@@ -72,7 +73,7 @@ pub fn RandAstGenerator::new(
   ident_max_len~:Int=10,
   tuple_type_max_len~: Int = 4,
   direct_array_max_len~: Int = 10,
-  param_types_max_len~: Int = 15,
+  param_types_max_len~: Int = 7,
   expr_max_depth~: Int = 5,
   stmt_max_num~: Int = 30,
   let_tuple_max_bindings~: Int = 4,
@@ -92,6 +93,7 @@ pub fn RandAstGenerator::new(
     let_tuple_max_bindings,
     ty_env: Env::new(),
     id_env: Env::new(),
+    mutable_id_env: Env::new(),
     generic,
     curr_block: block,
     ret_ty,
@@ -233,6 +235,10 @@ fn RandAstGenerator::gen_struct_type(self: Self) -> Type {
     Some(name) => name;
     None => return self.gen_type();
   }
+  // if struct is generic, gen_type
+  if self.structs.get(name).unwrap().generic_param is Some(_) {
+    return self.gen_type()
+  }
   let s = self.structs.get(name).unwrap()
   s.type_of()
 }
@@ -242,6 +248,9 @@ fn RandAstGenerator::gen_enum_type(self: Self) -> Type {
   let name = match self.choice(enums) {
     Some(name) => name;
     None => return self.gen_type();
+  }
+  if self.enums.get(name).unwrap().generic_param is Some(_) {
+    return self.gen_type();
   }
   let e = self.enums.get(name).unwrap()
   e.type_of()
@@ -525,10 +534,13 @@ fn RandAstGenerator::gen_if_level_expr(self: Self, ty: Type, deepth: Int) -> IfL
 
 fn RandAstGenerator::gen_block_expr(self: Self, ty: Type) -> BlockExpr {
   let block = BlockExpr::new()
+  self.curr_block = Some(block);
+
   let gen_stmt_num = self.pos_int(self.stmt_max_num);
   let mut stmt_num = 0;
   while stmt_num < gen_stmt_num {
     let stmt = self.gen_stmt();
+    //println(stmt)
     block.stmts.push(stmt);
     stmt_num += 1;
   }
@@ -781,6 +793,8 @@ pub fn RandAstGenerator::gen_top_func_def(self: Self) -> TopFuncDef {
   }
   
   let ret_ty = self.gen_type();
+  let fty = Type::Func(params.map((p) => p.1), ret_ty);
+  self.id_env.set(name, fty);
   let body = self.gen_block_expr(ret_ty);
   self.generic = None; // Clear the generic parameter after use
   
