@@ -650,7 +650,7 @@ pub(all) enum Stmt {
   LetTuple(Array[Binding], Type?, Expr)
   LetMut(Ident, Type?, Expr)
   Let(Ident, Type?, Expr)
-  LocalFuncDef(Array[(Ident, Type?)], Type?, BlockExpr)
+  LocalFuncDef(Ident, Array[(Ident, Type?)], Type?, BlockExpr)
   Assign(LeftValue, Expr)
   While(Expr, BlockExpr)
   Return(Expr)
@@ -681,7 +681,7 @@ pub impl Show for Stmt with output(self, logger) {
       }
       logger.write_string("let \{ident}\{ty_str} = \{expr};");
     }
-    LocalFuncDef(params, ret_ty_opt, body) => {
+    LocalFuncDef(fname, params, ret_ty_opt, body) => {
       let params_str = params.map(fn(p) {
         let (name, ty_opt) = p
         match ty_opt {
@@ -693,7 +693,7 @@ pub impl Show for Stmt with output(self, logger) {
         Some(ret_ty) => " -> \{ret_ty}";
         None => "";
       }
-      logger.write_string("fn (\{params_str})\{ret_ty_str} ");
+      logger.write_string("fn \{fname}(\{params_str})\{ret_ty_str} ");
       logger.write_string(body.to_string());
     }
     Assign(left_value, expr) => {
