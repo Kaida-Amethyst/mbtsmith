@@ -203,7 +203,13 @@ pub fn RandAstGenerator::gen_type(self: Self) -> Type {
       if self.generic is Some(generic) {
         GenericDef(generic)
       } else {
-        self.gen_type()
+        // Return a basic type instead of recursive call
+        match self.pos_int(4) {
+          0 => Type::Unit;
+          1 => Bool;
+          2 => Int;
+          _ => Double;
+        }
       }
     }
     _ => self.gen_generic_sub_type(); // e.g. Option[T]
@@ -233,11 +239,11 @@ fn RandAstGenerator::gen_struct_type(self: Self) -> Type {
   let structs = self.structs.keys().collect();
   let name = match self.choice(structs) {
     Some(name) => name;
-    None => return self.gen_type();
+    None => return Int; // Return basic type instead of recursive call
   }
-  // if struct is generic, gen_type
+  // if struct is generic, return basic type
   if self.structs.get(name).unwrap().generic_param is Some(_) {
-    return self.gen_type()
+    return Int // Return basic type instead of recursive call
   }
   let s = self.structs.get(name).unwrap()
   s.type_of()
@@ -247,10 +253,10 @@ fn RandAstGenerator::gen_enum_type(self: Self) -> Type {
   let enums = self.enums.keys().collect();
   let name = match self.choice(enums) {
     Some(name) => name;
-    None => return self.gen_type();
+    None => return Bool; // Return basic type instead of recursive call
   }
   if self.enums.get(name).unwrap().generic_param is Some(_) {
-    return self.gen_type();
+    return Bool; // Return basic type instead of recursive call
   }
   let e = self.enums.get(name).unwrap()
   e.type_of()
@@ -278,9 +284,9 @@ fn RandAstGenerator::gen_generic_sub_type(self: Self) -> Type {
   all_generic_types.append(generic_structs);
   all_generic_types.append(generic_enums);
   
-  // If no generic types found, generate a regular type
+  // If no generic types found, return a basic type
   if all_generic_types.is_empty() {
-    return self.gen_type();
+    return Double; // Return basic type instead of recursive call
   }
   
   // Pick a random generic type and substitute with a concrete type
@@ -331,7 +337,7 @@ fn RandAstGenerator::gen_value_expr(self: Self, ty: Type, deepth: Int) -> ValueE
     let n = if deepth < self.expr_max_depth {
       self.pos_int(10)
     } else {
-      self.pos_int(6)
+      self.pos_int(6) // When at max depth, only choose 0-5 to avoid recursive cases
     }
     match n {
       0..<3 => default_expr(); // construct it directly
@@ -343,12 +349,20 @@ fn RandAstGenerator::gen_value_expr(self: Self, ty: Type, deepth: Int) -> ValueE
         }
       }
       6..<8 => {
-        let expr = self.gen_expr(ty, deepth + 1);
-        ValueExpr::GroupExpr(expr);
+        if deepth < self.expr_max_depth {
+          let expr = self.gen_expr(ty, deepth + 1);
+          ValueExpr::GroupExpr(expr)
+        } else {
+          default_expr() // Avoid recursion at max depth
+        }
       }
       _ => {
-        let block_expr = self.gen_block_expr(ty);
-        ValueExpr::BlockExpr(block_expr);
+        if deepth < self.expr_max_depth {
+          let block_expr = self.gen_block_expr(ty);
+          ValueExpr::BlockExpr(block_expr)
+        } else {
+          default_expr() // Avoid recursion at max depth
+        }
       }
     }
   }
@@ -455,9 +469,13 @@ fn RandAstGenerator::gen_expr(self: Self, ty: Type, deepth: Int) -> Expr {
   let n = if deepth < self.expr_max_depth {
     self.pos_int(18)
   } else {
-    self.pos_int(2)
+    self.pos_int(2) // This will return 0 or 1, which should match simple cases
   }
   match n {
+    0..<2 => {
+      // When at max depth, return simple IfLevelExpr with non-recursive apply
+      IfLevelExpr(self.gen_if_level_expr(ty, deepth))
+    }
     2..<4 => {
       let left = self.gen_expr(ty, deepth + 1);
       let right = self.gen_expr(ty, deepth + 1);
@@ -514,9 +532,14 @@ fn RandAstGenerator::gen_if_level_expr(self: Self, ty: Type, deepth: Int) -> IfL
   let n = if deepth < self.expr_max_depth {
     self.pos_int(4)
   } else {
-    self.pos_int(2)
+    self.pos_int(2) // This will return 0 or 1
   }
   match n {
+    0..<2 => {
+      // When at max depth, return simple ApplyExpr
+      let aexpr = self.gen_apply_expr(ty, deepth);
+      IfLevelExpr::ApplyExpr(aexpr)
+    }
     2..<3 => {
       let if_expr = self.gen_if_expr(ty);
       IfLevelExpr::IfExpr(if_expr)
