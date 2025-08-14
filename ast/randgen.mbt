@@ -43,7 +43,7 @@ fn[K, V: Eq] Env::collect_keys_by_value(self: Self[K, V], value: V) -> Array[K] 
   self.collect_keys_by_cond((v) => v == value);
 }
 
-pub struct RandAstGenerator {
+pub(all) struct RandAstGenerator {
   rand: @random.Rand
   upper_max_len: Int
   ident_max_len: Int
@@ -52,9 +52,13 @@ pub struct RandAstGenerator {
   param_types_max_len: Int
   expr_max_depth: Int
   stmt_max_num: Int
+  let_tuple_max_bindings: Int
   ty_env: Env[Upper, Type]
   id_env: Env[Ident, Type]
   generic: Upper?
+
+  mut curr_block : BlockExpr
+  ret_ty: Type
 
   // structs
   structs: Map[Upper, StructDef]
@@ -71,7 +75,11 @@ pub fn RandAstGenerator::new(
   param_types_max_len~: Int = 15,
   expr_max_depth~: Int = 5,
   stmt_max_num~: Int = 30,
-  generic~: Upper? = None) -> RandAstGenerator {
+  let_tuple_max_bindings~: Int = 4,
+  generic~: Upper? = None,
+  block: BlockExpr,
+  ret_ty~: Type = Unit
+) -> RandAstGenerator {
   RandAstGenerator::{
     rand: @random.Rand::new(),
     upper_max_len,
@@ -81,9 +89,12 @@ pub fn RandAstGenerator::new(
     param_types_max_len,
     expr_max_depth,
     stmt_max_num,
+    let_tuple_max_bindings,
     ty_env: Env::new(),
     id_env: Env::new(),
     generic,
+    curr_block: block,
+    ret_ty,
     structs: Map::new(),
     enums: Map::new(),
     toplets: Map::new(),
@@ -159,6 +170,14 @@ pub fn RandAstGenerator::new_ident(self: Self) -> Ident {
   ident
 }
 
+pub fn RandAstGenerator::new_binding(self: Self) -> Binding {
+  if self.pos_int(6) > 0 {
+    Ident(self.new_ident())
+  } else {
+    WhileCard
+  }
+}
+
 pub fn RandAstGenerator::gen_double(self: Self) -> Double {
   self.rand.double()
 }
@@ -189,8 +208,14 @@ pub fn RandAstGenerator::gen_type(self: Self) -> Type {
   }
 }
 
-fn RandAstGenerator::gen_tuple_type(self: Self) -> Type {
+fn RandAstGenerator::gen_tuple_type(self: Self, size~: Int? = None) -> Type {
   let types = Array::new();
+  if size is Some(size) {
+    for i in 0 ..< size {
+      types.push(self.gen_type());
+    }
+    return Tuple(types);
+  }
   for i in 0..<self.pos_int(self.tuple_type_max_len) {
     types.push(self.gen_type());
   }
@@ -313,7 +338,7 @@ fn RandAstGenerator::gen_value_expr(self: Self, ty: Type, deepth: Int) -> ValueE
         ValueExpr::GroupExpr(expr);
       }
       _ => {
-        let block_expr = self.gen_block_expr(ty, deepth + 1);
+        let block_expr = self.gen_block_expr(ty);
         ValueExpr::BlockExpr(block_expr);
       }
     }
@@ -348,9 +373,6 @@ fn RandAstGenerator::gen_value_expr(self: Self, ty: Type, deepth: Int) -> ValueE
       }
       get_value_expr_helper(Tuple(elem_tys), default_expr)
     }
-    //Func()
-    // GenericDef(Upper)
-    // GenericSub(Upper, Type)
     Struct(name, fields) => {
       let default_expr = () => {
         let field_exprs = Array::new();
@@ -380,10 +402,10 @@ fn RandAstGenerator::gen_value_expr(self: Self, ty: Type, deepth: Int) -> ValueE
       }
       get_value_expr_helper(Enum(name, variants), default_expr)
     }
-    _ => {
-      println("Unimplemented")
-      panic()
-    }
+    //Func()
+    // GenericDef(Upper)
+    // GenericSub(Upper, Type)
+    _ => ValueExpr::UnitExpr;
   }
 }
 
@@ -478,11 +500,7 @@ fn RandAstGenerator::gen_expr(self: Self, ty: Type, deepth: Int) -> Expr {
     _ => IfLevelExpr(self.gen_if_level_expr(ty, deepth));
   }
 }
-//pub(all) enum IfLevelExpr {
-//  ApplyExpr(ApplyExpr)
-//  IfExpr(IfExpr)
-//  MatchExpr(MatchExpr)
-//}
+
 fn RandAstGenerator::gen_if_level_expr(self: Self, ty: Type, deepth: Int) -> IfLevelExpr {
   let n = if deepth < self.expr_max_depth {
     self.pos_int(4)
@@ -491,11 +509,11 @@ fn RandAstGenerator::gen_if_level_expr(self: Self, ty: Type, deepth: Int) -> IfL
   }
   match n {
     2..<3 => {
-      let if_expr = self.gen_if_expr(ty, deepth + 1);
+      let if_expr = self.gen_if_expr(ty);
       IfLevelExpr::IfExpr(if_expr);
     }
     3..<4 => {
-      let match_expr = self.gen_match_expr(ty, deepth + 1);
+      let match_expr = self.gen_match_expr(ty);
       IfLevelExpr::MatchExpr(match_expr);
     }
     _ => {
@@ -505,18 +523,143 @@ fn RandAstGenerator::gen_if_level_expr(self: Self, ty: Type, deepth: Int) -> IfL
   }
 }
 
-fn RandAstGenerator::gen_block_expr(self: Self, ty: Type, deepth: Int) -> BlockExpr {
+fn RandAstGenerator::gen_block_expr(self: Self, ty: Type) -> BlockExpr {
+  let block = BlockExpr::new()
+  let gen_stmt_num = self.pos_int(self.stmt_max_num);
+  let mut stmt_num = 0;
+  while stmt_num < gen_stmt_num {
+    let stmt = self.gen_stmt();
+    block.stmts.push(stmt);
+    stmt_num += 1;
+  }
+
+  let last_expr = if ty != Unit {
+    Some(self.gen_expr(ty, 0));
+  } else {
+    None
+  }
+  block.last_expr = last_expr;
+  block
+}
+
+//pub(all) struct IfExpr {
+//  cond: Expr
+//  then_: BlockExpr
+//  else_: Either[IfExpr, BlockExpr]
+//}
+fn RandAstGenerator::gen_if_expr(self: Self, ty: Type) -> IfExpr {
+  let cond_expr = self.gen_expr(Bool, 0);
+  let then_block = self.gen_block_expr(ty);
+  
+  let else_expr = if self.pos_int(2) > 0 {
+    let if_expr = self.gen_if_expr(ty);
+    Either::Left(if_expr)
+  } else {
+    Either::Right(self.gen_block_expr(ty))
+  }
+  
+  IfExpr::{
+    cond: cond_expr,
+    then_: then_block,
+    else_: else_expr,
+  }
+}
+
+fn RandAstGenerator::gen_match_expr(self: Self, ty: Type) -> MatchExpr {
   ...
 }
 
-fn RandAstGenerator::gen_if_expr(self: Self, ty: Type, deepth: Int) -> IfExpr {
-  ...
-}
-
-fn RandAstGenerator::gen_match_expr(self: Self, ty: Type, deepth: Int) -> MatchExpr {
-  ...
-}
-
+//pub(all) enum Stmt {
+//  LetTupe(Array[Binding], Type?, Expr)
+//  LetMut(Ident, Type?, Expr)
+//  Let(Ident, Type?, Expr)
+//  LocalFuncDef(Array[(Ident, Type?)], Type?, BlockExpr)
+//  Assign(LeftValue, Expr)
+//  While(Expr, BlockExpr)
+//  Return(Expr)
+//  ExprStmt(Expr)
+//};
 fn RandAstGenerator::gen_stmt(self: Self) -> Stmt {
+  let n = self.pos_int(10)
+  match n {
+    0..<2 => {
+      let bindings = Array::new();
+      let mut bindings_len = 0 ;
+      while bindings_len <= 0 {
+        bindings_len = self.pos_int(self.let_tuple_max_bindings);
+      }
+      for i in 0..<bindings_len {
+        let bind = self.new_binding();
+        bindings.push(bind);
+      }
+      let ty = self.gen_tuple_type(size=Some(bindings_len));
+      let expr = self.gen_expr(ty, 0);
+      let ty = if self.pos_int(2) > 0 {
+        Some(ty)
+      } else {
+        None
+      }
+      Stmt::LetTuple(bindings, ty, expr);
+    }
+    2..<4 => {
+      let ident = self.new_ident();
+      let ty = self.gen_type();
+      let expr = self.gen_expr(ty, 0);
+      let ty = if self.pos_int(2) > 0 {
+        Some(ty)
+      } else {
+        None
+      }
+      Stmt::LetMut(ident, ty, expr);
+    }
+    4..<6 => {
+      let ident = self.new_ident();
+      let ty = self.gen_type();
+      let expr = self.gen_expr(ty, 0);
+      let ty = if self.pos_int(2) > 0 {
+        Some(ty)
+      } else {
+        None
+      }
+      Stmt::Let(ident, ty, expr);
+    }
+    //7..<8 => {
+    //  let left_value = self.gen_left_value();
+    //  let expr = self.gen_expr(left_value.ty(), 0);
+    //  Stmt::Assign(left_value, expr);
+    //}
+    _ => {
+      let cond_expr = self.gen_expr(Bool, 0);
+      let block_expr = self.gen_block_expr(Unit);
+      Stmt::While(cond_expr, block_expr);
+    }
+  }
+}
+
+fn RandAstGenerator::gen_local_func_def(self: Self) -> Stmt {
+  ...
+}
+
+fn RandAstGenerator::gen_top_let(self: Self) -> TopLet {
+  ...
+}
+
+fn RandAstGenerator::gen_top_func_def(self: Self) -> TopFuncDef {
+  ...
+}
+
+fn RandAstGenerator::gen_struct_def(self: Self) -> StructDef {
+  ...
+}
+
+fn RandAstGenerator::gen_enum_def(self: Self) -> EnumDef {
+  ...
+}
+
+fn RandAstGenerator::gen_top_decl(self: Self) -> TopDecl {
+  ...
+}
+
+fn RandAstGenerator::gen_program(self: Self) -> Program {
   ...
 }

@@ -606,7 +606,7 @@ pub impl Show for Pattern with output(self, logger) {
 /// let tuple_val = ApplyExpr::ValueExpr(tuple_val);
 /// let tuple_val = IfLevelExpr::ApplyExpr(tuple_val);
 /// let tuple_val = Expr::IfLevelExpr(tuple_val);
-/// let tuple_stmt = Stmt::LetTupe(bindings, None, tuple_val);
+/// let tuple_stmt = Stmt::LetTuple(bindings, None, tuple_val);
 /// inspect(tuple_stmt, content="let (a, b) = (42, 42);")
 ///
 /// // Assignment statement
@@ -632,7 +632,7 @@ pub impl Show for Pattern with output(self, logger) {
 /// inspect(expr_stmt, content="42;")
 /// ```
 pub(all) enum Stmt {
-  LetTupe(Array[Binding], Type?, Expr)
+  LetTuple(Array[Binding], Type?, Expr)
   LetMut(Ident, Type?, Expr)
   Let(Ident, Type?, Expr)
   LocalFuncDef(Array[(Ident, Type?)], Type?, BlockExpr)
@@ -644,7 +644,7 @@ pub(all) enum Stmt {
 
 pub impl Show for Stmt with output(self, logger) {
   match self {
-    LetTupe(bindings, ty_opt, expr) => {
+    LetTuple(bindings, ty_opt, expr) => {
       let bindings_str = bindings.map(b => b.to_string()).join(", ");
       let ty_str = match ty_opt {
         Some(ty) => ": \{ty}";
