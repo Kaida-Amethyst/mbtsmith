@@ -682,7 +682,13 @@ pub impl Show for Stmt with output(self, logger) {
       logger.write_string("let \{ident}\{ty_str} = \{expr};");
     }
     LocalFuncDef(params, ret_ty_opt, body) => {
-      let params_str = params.map(p => "\{p.0}: \{p.1}").join(", ");
+      let params_str = params.map(fn(p) {
+        let (name, ty_opt) = p
+        match ty_opt {
+          Some(ty) => "\{name}: \{ty}"
+          None => name.to_string()
+        }
+      }).join(", ");
       let ret_ty_str = match ret_ty_opt {
         Some(ret_ty) => " -> \{ret_ty}";
         None => "";

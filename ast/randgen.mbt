@@ -57,6 +57,7 @@ pub struct RandomGenerator {
   // 环境
   mut var_env: Env[Ident, Type]     // 变量类型环境
   mut mutable_vars: Env[Ident, Type] // 可变变量环境
+  mut unused_mutable_vars: Map[Ident, Type] // 未使用的可变变量（需要强制赋值）
   type_env: Env[Upper, Type]    // 自定义类型环境
   
   // 已定义的类型和函数
@@ -88,6 +89,7 @@ pub fn RandomGenerator::new() -> RandomGenerator {
     total_lines_target: 2000,   // 目标行数
     var_env: Env::new(),
     mutable_vars: Env::new(),
+    unused_mutable_vars: Map::new(),
     type_env: Env::new(),
     struct_defs: Map::new(),
     enum_defs: Map::new(),
@@ -176,6 +178,14 @@ fn RandomGenerator::gen_basic_type(self: Self) -> Type {
   }
 }
 
+/// 检查类型是否为基础类型
+fn RandomGenerator::is_basic_type(self: Self, ty: Type) -> Bool {
+  match ty {
+    Unit | Bool | Int | Double => true
+    _ => false
+  }
+}
+
 /// 增强的类型生成器，支持更复杂的嵌套类型
 fn RandomGenerator::gen_type(self: Self, allow_complex: Bool) -> Type {
   if self.current_nested_level >= self.max_nested_level || not(allow_complex) || self.current_depth >= self.max_depth - 1 {
@@ -184,11 +194,11 @@ fn RandomGenerator::gen_type(self: Self, allow_complex: Bool) -> Type {
   
   // 使用加权选择，基础类型权重更高，保证程序可编译
   let choices = [
-    (0, 60),  // 基础类型 - 提高权重
-    (1, 15),  // 数组类型 - 降低权重  
-    (2, 20),  // 元组类型 - 降低权重
-    (3, 3),   // 自定义结构体 - 大幅降低权重
-    (4, 2),   // 自定义枚举 - 大幅降低权重
+    (0, 80),  // 基础类型 - 大幅提高权重
+    (1, 10),  // 数组类型 - 降低权重  
+    (2, 8),   // 元组类型 - 降低权重
+    (3, 1),   // 自定义结构体 - 极大降低权重
+    (4, 1),   // 自定义枚举 - 极大降低权重
   ]
   
   match self.weighted_choice(choices) {
@@ -268,6 +278,35 @@ fn RandomGenerator::find_all_vars_of_type(self: Self, target_type: Type) -> Arra
   self.var_env.collect_vars_of_type(target_type)
 }
 
+/// 标记可变变量已被使用（从未使用列表中移除）
+fn RandomGenerator::mark_mutable_var_used(self: Self, var_name: Ident) -> Unit {
+  // 创建新的Map来替代移除操作
+  let new_map = Map::new()
+  self.unused_mutable_vars.each(fn(name, ty) {
+    if name != var_name {
+      new_map.set(name, ty)
+    }
+  })
+  self.unused_mutable_vars = new_map
+}
+
+/// 生成对未使用可变变量的强制赋值语句
+fn RandomGenerator::gen_force_assign_unused_mutables(self: Self) -> Array[Stmt] {
+  let assignments = Array::new()
+  
+  self.unused_mutable_vars.each(fn(var_name, var_type) {
+    // 为每个未使用的可变变量生成一个赋值语句
+    let new_value = self.gen_expr(var_type, true)
+    let assign_stmt = Assign(LeftValue::Ident(var_name), new_value)
+    assignments.push(assign_stmt)
+  })
+  
+  // 清空未使用列表
+  self.unused_mutable_vars = Map::new()
+  
+  assignments
+}
+
 /// 生成复杂的字面量表达式
 fn RandomGenerator::gen_literal_expr(self: Self, ty: Type) -> Expr {
   match ty {
@@ -323,7 +362,14 @@ fn RandomGenerator::gen_enum_construct_expr(self: Self, name: Upper, variants: A
 /// 生成变量引用表达式
 fn RandomGenerator::gen_var_expr(self: Self, ty: Type) -> Expr? {
   match self.find_var_of_type(ty) {
-    Some(var) => Some(IfLevelExpr(ApplyExpr(ValueExpr(IdentExpr(var)))))
+    Some(var) => {
+      // 如果是可变变量，标记为已使用
+      match self.unused_mutable_vars.get(var) {
+        Some(_) => self.mark_mutable_var_used(var)
+        None => ()
+      }
+      Some(IfLevelExpr(ApplyExpr(ValueExpr(IdentExpr(var)))))
+    }
     None => None
   }
 }
@@ -435,10 +481,10 @@ fn RandomGenerator::gen_expr(self: Self, ty: Type, simple: Bool) -> Expr {
   if self.current_depth >= self.max_depth || simple {
     // 在最大深度或要求简单表达式时，优先生成字面量或变量引用
     let choices = [
-      (0, 40), // 字面量 - 权重40
-      (1, 30), // 变量引用 - 权重30
-      (2, 20), // 函数调用 - 权重20
-      (3, 10), // 字段访问 - 权重10
+      (0, 60), // 字面量 - 大幅提高权重
+      (1, 35), // 变量引用 - 提高权重
+      (2, 3),  // 函数调用 - 大幅降低权重
+      (3, 2),  // 字段访问 - 大幅降低权重
     ]
     
     match self.weighted_choice(choices) {
@@ -551,12 +597,12 @@ fn RandomGenerator::gen_complex_bool_expr(self: Self) -> Expr {
 /// 生成复杂的Int表达式
 fn RandomGenerator::gen_complex_int_expr(self: Self) -> Expr {
   let choices = [
-    (0, 25), // 字面量Int
-    (1, 20), // 变量引用
-    (2, 25), // 算术表达式
-    (3, 15), // 函数调用
-    (4, 10), // 数组访问
-    (5, 5),  // 字段访问
+    (0, 40), // 字面量Int - 提高权重
+    (1, 35), // 变量引用 - 提高权重
+    (2, 15), // 算术表达式 - 降低权重
+    (3, 5),  // 函数调用 - 大幅降低权重
+    (4, 3),  // 数组访问 - 大幅降低权重
+    (5, 2),  // 字段访问 - 大幅降低权重
   ]
   
   match self.weighted_choice(choices) {
@@ -894,6 +940,9 @@ fn RandomGenerator::gen_let_mut_stmt(self: Self) -> Stmt {
   self.var_env.set(var_name, var_type)
   self.mutable_vars.set(var_name, var_type)
   
+  // 将变量添加到未使用的可变变量列表中
+  self.unused_mutable_vars.set(var_name, var_type)
+  
   let type_annotation = if self.rand_int(10) < 7 { Some(var_type) } else { None }
   LetMut(var_name, type_annotation, init_expr)
 }
@@ -904,23 +953,32 @@ fn RandomGenerator::gen_let_tuple_stmt(self: Self) -> Stmt {
   let bindings = Array::new()
   let types = Array::new()
   
+  // 首先确定所有类型
   for i = 0; i < tuple_size; i = i + 1 {
     let elem_type = self.gen_type(false)
     types.push(elem_type)
+  }
+  
+  // 生成元组表达式（不能引用即将被绑定的变量）
+  let tuple_type = Type::Tuple(types)
+  let tuple_expr = self.gen_expr(tuple_type, false)
+  
+  // 然后生成绑定并将变量添加到环境（在生成表达式之后）
+  for i = 0; i < tuple_size; i = i + 1 {
+    let elem_type = types[i]
     
     if self.rand_bool() {
       // 生成标识符绑定
       let var_name = self.gen_ident()
-      self.var_env.set(var_name, elem_type)
       bindings.push(Binding::Ident(var_name))
+      // 在生成表达式后才添加到环境，避免循环引用
+      self.var_env.set(var_name, elem_type)
     } else {
       // 生成通配符绑定
       bindings.push(Binding::WhileCard)
     }
   }
   
-  let tuple_type = Type::Tuple(types)
-  let tuple_expr = self.gen_expr(tuple_type, false)
   let type_annotation = if self.rand_bool() { Some(tuple_type) } else { None }
   
   LetTuple(bindings, type_annotation, tuple_expr)
@@ -939,6 +997,9 @@ fn RandomGenerator::gen_assign_stmt(self: Self) -> Stmt {
   }
   
   let (var_name, var_type) = self.choice(mut_vars).unwrap()
+  
+  // 标记这个可变变量已被使用
+  self.mark_mutable_var_used(var_name)
   
   // 根据变量类型生成合适的左值
   let left_value = if self.rand_int(10) < 8 {
@@ -994,12 +1055,14 @@ fn RandomGenerator::gen_local_func_def_stmt(self: Self) -> Stmt {
   
   // 创建新的函数作用域
   let old_var_env = self.var_env
+  let old_mut_env = self.mutable_vars
   self.var_env = old_var_env.sub_env()
+  self.mutable_vars = old_mut_env.sub_env()
   
-  // 生成参数
+  // 生成参数，使用基础类型确保类型安全
   for i = 0; i < param_count; i = i + 1 {
     let param_name = self.gen_ident()
-    let param_type = self.gen_type(false)
+    let param_type = self.gen_basic_type()  // 使用基础类型确保安全
     params.push((param_name, Some(param_type)))
     
     // 将参数添加到函数环境中
@@ -1007,7 +1070,7 @@ fn RandomGenerator::gen_local_func_def_stmt(self: Self) -> Stmt {
   }
   
   // 生成返回类型和函数体
-  let ret_ty = self.gen_type(true)
+  let ret_ty = self.gen_basic_type()  // 使用基础类型确保安全
   let old_return_type = self.current_return_type
   self.current_return_type = ret_ty
   
@@ -1016,6 +1079,7 @@ fn RandomGenerator::gen_local_func_def_stmt(self: Self) -> Stmt {
   // 恢复环境
   self.current_return_type = old_return_type
   self.var_env = old_var_env
+  self.mutable_vars = old_mut_env
   
   LocalFuncDef(params, Some(ret_ty), body)
 }
@@ -1084,6 +1148,13 @@ fn RandomGenerator::gen_block_expr(self: Self, return_type: Type) -> BlockExpr {
     }
   }
   
+  // 在函数结束前，为所有未使用的可变变量生成强制赋值
+  let force_assignments = self.gen_force_assign_unused_mutables()
+  for assign_stmt in force_assignments {
+    block.push(assign_stmt)
+    self.current_lines = self.current_lines + 1
+  }
+  
   // 生成返回表达式（如果需要）
   if return_type != Unit {
     let last_expr = if self.rand_bool() {
@@ -1146,12 +1217,28 @@ pub fn RandomGenerator::gen_top_let(self: Self) -> TopLet {
 
 pub fn RandomGenerator::gen_struct_def(self: Self) -> StructDef {
   let name = self.gen_upper()
-  let field_count = self.rand_int(8) + 1  // 1-8个字段，增加复杂度
+  let field_count = self.rand_int(5) + 1  // 1-5个字段，减少复杂度
   let fields = Array::new()
   
   for i = 0; i < field_count; i = i + 1 {
     let field_name = self.gen_ident()
-    let field_type = self.gen_type(true)  // 允许复杂字段类型
+    // 对于结构体字段，主要使用基础类型或简单的复合类型
+    let field_type = if self.rand_int(10) < 7 {
+      self.gen_basic_type()  // 70%概率使用基础类型
+    } else {
+      // 30%概率使用简单的复合类型
+      match self.rand_int(2) {
+        0 => Array(self.gen_basic_type())
+        _ => {
+          let tuple_size = self.rand_int(3) + 2
+          let tuple_types = Array::new()
+          for j = 0; j < tuple_size; j = j + 1 {
+            tuple_types.push(self.gen_basic_type())
+          }
+          Tuple(tuple_types)
+        }
+      }
+    }
     fields.push((field_name, field_type))
   }
   
@@ -1168,16 +1255,22 @@ pub fn RandomGenerator::gen_struct_def(self: Self) -> StructDef {
 
 pub fn RandomGenerator::gen_enum_def(self: Self) -> EnumDef {
   let name = self.gen_upper()
-  let variant_count = self.rand_int(6) + 1  // 1-6个变体，增加复杂度
+  let variant_count = self.rand_int(4) + 1  // 1-4个变体，减少复杂度
   let variants = Array::new()
   
   for i = 0; i < variant_count; i = i + 1 {
     let variant_name = self.gen_upper()
-    let field_count = self.rand_int(5)  // 0-4个字段，增加复杂度
+    let field_count = self.rand_int(4)  // 0-3个字段，减少复杂度
     let variant_fields = Array::new()
     
     for j = 0; j < field_count; j = j + 1 {
-      variant_fields.push(self.gen_type(true))  // 允许复杂变体字段类型
+      // 对于枚举变体，主要使用基础类型
+      let field_type = if self.rand_int(10) < 8 {
+        self.gen_basic_type()  // 80%概率使用基础类型
+      } else {
+        Array(self.gen_basic_type())  // 20%概率使用基础类型的数组
+      }
+      variant_fields.push(field_type)
     }
     
     variants.push((variant_name, variant_fields))
@@ -1201,12 +1294,14 @@ pub fn RandomGenerator::gen_top_func_def(self: Self) -> TopFuncDef {
   
   // 创建新的环境作用域
   let old_var_env = self.var_env
+  let old_mut_env = self.mutable_vars
   self.var_env = old_var_env.sub_env()
+  self.mutable_vars = old_mut_env.sub_env()
   
-  // 生成参数
+  // 生成参数，使用基础类型确保类型安全
   for i = 0; i < param_count; i = i + 1 {
     let param_name = self.gen_ident()
-    let param_type = self.gen_type(true)  // 允许复杂参数类型
+    let param_type = self.gen_basic_type()  // 使用基础类型确保安全
     params.push((param_name, param_type))
     
     // 将参数添加到环境中
@@ -1214,7 +1309,7 @@ pub fn RandomGenerator::gen_top_func_def(self: Self) -> TopFuncDef {
   }
   
   // 生成返回类型和函数体
-  let ret_ty = self.gen_type(true)
+  let ret_ty = self.gen_basic_type()  // 使用基础类型确保安全
   let old_return_type = self.current_return_type
   self.current_return_type = ret_ty
   
@@ -1223,6 +1318,7 @@ pub fn RandomGenerator::gen_top_func_def(self: Self) -> TopFuncDef {
   // 恢复环境和返回类型
   self.current_return_type = old_return_type
   self.var_env = old_var_env
+  self.mutable_vars = old_mut_env
   
   let func_def = { generic_param: None, name, params, ret_ty, body }
   
