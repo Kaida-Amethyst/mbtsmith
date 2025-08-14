@@ -24,6 +24,24 @@ fn[K:Eq+Hash, V] Env::get(self: Self[K, V], key: K) -> V? {
   }
 }
 
+fn[K:Eq+Hash, V] Env::set(self: Self[K, V], key: K, value: V) -> Unit {
+  self.map.set(key, value);
+}
+
+fn[K, V: Eq] Env::collect_keys_by_value(self: Self[K, V], value: V) -> Array[K] {
+  let keys = Array::new();
+  for pair in self.map {
+    let (key, v) = pair;
+    if v == value {
+      keys.push(key);
+    }
+  }
+  if self.parent is Some(parent) {
+    keys.append(parent.collect_keys_by_value(value));
+  }
+  keys
+}
+
 pub struct RandAstGenerator {
   rand: @random.Rand
   upper_max_len: Int
@@ -160,6 +178,7 @@ pub(all) enum Type {
 
   // User-defined type, e.g. Point
   Struct(Upper, Array[(Ident, Type)])
+  Enum(Upper, Array[(Upper, Array[Type])]) // e.g. Color::Red(Int, Int, Int)
   GenericDef(Upper)  // T
   GenericSub(Upper, Type) // Complex[Int]
 }
@@ -180,6 +199,7 @@ pub impl Show for Type with output(self, logger) {
       "(\{args_str}) -> \{ret}"
     }
     Struct(name, _) => "\{name}";
+    Enum(name, _) => "\{name}";
     GenericDef(name) => "\{name}";
     GenericSub(name, inner) => "\{name}[\{inner}]";
   }
@@ -830,4 +850,30 @@ pub impl Show for LeftValue with output(self, logger) {
     ArrAcc(left, index) => "\{left}[\{index}]";
   }
   logger.write_string(s);
+}
+
+pub(all) struct TopLet {
+  name: Ident
+  ty: Type?
+  value: Expr
+}
+
+pub(all) struct TopFuncDef {
+  generic_param: Upper?
+  name: Ident
+  params: Array[(Ident, Type)]
+  ret_ty: Type
+  body: BlockExpr
+}
+
+pub(all) struct StructDef {
+  generic_param: Upper?
+  name: Upper
+  fields: Array[(Ident, Type)]
+}
+
+pub(all) struct EnumDef {
+  generic_param: Upper?
+  name: Upper
+  variants: Array[(Upper, Array[Type])] // e.g. Point(x: Int, y: Int)
 }
