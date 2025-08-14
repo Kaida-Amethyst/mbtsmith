@@ -422,6 +422,25 @@ pub impl Show for Expr with output(self, logger) {
   logger.write_string(s);
 }
 
+///| IfLevelExpr represents expressions that have the same precedence as if expressions.
+///
+/// ```mbt
+/// let x = ValueExpr::IdentExpr(Ident("x"));
+/// let x = ApplyExpr::ValueExpr(x);
+/// inspect(IfLevelExpr::ApplyExpr(x), content="x")
+///
+/// let cond = ValueExpr::BoolExpr(true);
+/// let cond = ApplyExpr::ValueExpr(cond);
+/// let cond = IfLevelExpr::ApplyExpr(cond);
+/// let cond = Expr::IfLevelExpr(cond);
+/// let then_block = BlockExpr::{ nested_level: 0, stmts: [], last_expr: None };
+/// let else_block = BlockExpr::{ nested_level: 0, stmts: [], last_expr: None };
+/// let if_expr = IfExpr::{ cond, then_: then_block, else_: Right(else_block) };
+/// inspect(IfLevelExpr::IfExpr(if_expr), content="if true {\n} else {\n}")
+///
+/// let match_expr = MatchExpr::{ nested_level: 0, expr: cond, arms: [] };
+/// inspect(IfLevelExpr::MatchExpr(match_expr), content="match true {\n}")
+/// ```
 pub(all) enum IfLevelExpr {
   ApplyExpr(ApplyExpr)
   IfExpr(IfExpr)
@@ -436,6 +455,37 @@ pub impl Show for IfLevelExpr with output(self, logger) {
   }
 }
 
+///| IfExpr represents conditional expressions with if-then-else structure.
+///
+/// ```mbt
+/// let cond = ValueExpr::BoolExpr(true);
+/// let cond = ApplyExpr::ValueExpr(cond);
+/// let cond = IfLevelExpr::ApplyExpr(cond);
+/// let cond = Expr::IfLevelExpr(cond);
+///
+/// let x_val = ValueExpr::IntExpr(42);
+/// let x_val = ApplyExpr::ValueExpr(x_val);
+/// let x_val = IfLevelExpr::ApplyExpr(x_val);
+/// let x_val = Expr::IfLevelExpr(x_val);
+///
+/// let y_val = ValueExpr::IntExpr(24);
+/// let y_val = ApplyExpr::ValueExpr(y_val);
+/// let y_val = IfLevelExpr::ApplyExpr(y_val);
+/// let y_val = Expr::IfLevelExpr(y_val);
+///
+/// let then_block = BlockExpr::{ nested_level: 0, stmts: [], last_expr: Some(x_val) };
+/// let else_block = BlockExpr::{ nested_level: 0, stmts: [], last_expr: Some(y_val) };
+/// let if_expr = IfExpr::{ cond, then_: then_block, else_: Right(else_block) };
+///
+/// let expect =
+///   #|if true {
+///   #|  42
+///   #|} else {
+///   #|  24
+///   #|}
+///
+/// inspect(if_expr, content=expect)
+/// ```
 pub(all) struct IfExpr {
   cond: Expr
   then_: BlockExpr
@@ -451,29 +501,58 @@ pub impl Show for IfExpr with output(self, logger) {
       logger.write_string(if_expr.to_string());
     }
     Right(block) => {
-      logger.write_string("else ");
+      logger.write_string(" else ");
       logger.write_string(block.to_string());
     }
   }
 }
 
-///| BlockExpr is wrapped in `{}` and contains a sequence of statements.
+///| BlockExpr represents a block of code wrapped in `{}` containing statements and an optional final expression.
+/// A block can contain multiple statements followed by an optional expression that serves as the block's value.
+/// The nested_level field controls indentation for pretty printing.
 ///
 /// ```mbt
+/// // Simple block with just statements
 /// let i42 = ValueExpr::IntExpr(42);
 /// let i42 = ApplyExpr::ValueExpr(i42);
 /// let i42 = IfLevelExpr::ApplyExpr(i42);
 /// let i42 = Expr::IfLevelExpr(i42);
 ///
 /// let stmt = Stmt::Let(Ident("x"), None, i42);
-/// let block = BlockExpr::{ nested_level: 0, stmts: [stmt], last_expr: None };
+/// let block1 = BlockExpr::{ nested_level: 0, stmts: [stmt], last_expr: None };
 ///
-/// let expect = 
+/// let expect1 = 
 ///   #|{
 ///   #|  let x = 42;
 ///   #|}
 ///
-/// inspect(block, content=expect)
+/// inspect(block1, content=expect1)
+///
+/// // Block with statements and final expression
+/// let y_val = ValueExpr::IntExpr(100);
+/// let y_val = ApplyExpr::ValueExpr(y_val);
+/// let y_val = IfLevelExpr::ApplyExpr(y_val);
+/// let y_val = Expr::IfLevelExpr(y_val);
+///
+/// let stmt2 = Stmt::Let(Ident("y"), None, y_val);
+/// let final_expr = ValueExpr::IdentExpr(Ident("y"));
+/// let final_expr = ApplyExpr::ValueExpr(final_expr);
+/// let final_expr = IfLevelExpr::ApplyExpr(final_expr);
+/// let final_expr = Expr::IfLevelExpr(final_expr);
+///
+/// let block2 = BlockExpr::{ nested_level: 0, stmts: [stmt2], last_expr: Some(final_expr) };
+///
+/// let expect2 = 
+///   #|{
+///   #|  let y = 100;
+///   #|  y
+///   #|}
+///
+/// inspect(block2, content=expect2)
+///
+/// // Empty block
+/// let empty_block = BlockExpr::{ nested_level: 0, stmts: [], last_expr: None };
+/// inspect(empty_block, content="{\n}")
 /// ```
 pub struct BlockExpr {
   nested_level: Int // for print indentation
@@ -500,6 +579,38 @@ pub impl Show for BlockExpr with output(self, logger) {
   logger.write_string("}");
 }
 
+///| MatchExpr represents pattern matching expressions with multiple arms.
+///
+/// ```mbt
+/// let x = ValueExpr::IdentExpr(Ident("x"));
+/// let x = ApplyExpr::ValueExpr(x);
+/// let x = IfLevelExpr::ApplyExpr(x);
+/// let x = Expr::IfLevelExpr(x);
+///
+/// let val1 = ValueExpr::IntExpr(1);
+/// let val1 = ApplyExpr::ValueExpr(val1);
+/// let val1 = IfLevelExpr::ApplyExpr(val1);
+/// let val1 = Expr::IfLevelExpr(val1);
+///
+/// let val2 = ValueExpr::IntExpr(2);
+/// let val2 = ApplyExpr::ValueExpr(val2);
+/// let val2 = IfLevelExpr::ApplyExpr(val2);
+/// let val2 = Expr::IfLevelExpr(val2);
+///
+/// let arms = [
+///   (Pattern::Number(1), val1),
+///   (Pattern::WildCard, val2)
+/// ];
+/// let match_expr = MatchExpr::{ nested_level: 0, expr: x, arms };
+///
+/// let expect =
+///   #|match x {
+///   #|  1 => 1,
+///   #|  _ => 2,
+///   #|}
+///
+/// inspect(match_expr, content=expect)
+/// ```
 pub struct MatchExpr {
   nested_level: Int // for print indentation
   expr: Expr
@@ -567,6 +678,53 @@ pub impl Show for Pattern with output(self, logger) {
   }
 }
 
+///| Stmt represents different types of statements in the language.
+/// Statements are instructions that perform actions but do not return values.
+///
+/// ```mbt
+/// // Let statement with type annotation
+/// let val42 = ValueExpr::IntExpr(42);
+/// let val42 = ApplyExpr::ValueExpr(val42);
+/// let val42 = IfLevelExpr::ApplyExpr(val42);
+/// let val42 = Expr::IfLevelExpr(val42);
+/// let let_stmt = Stmt::Let(Ident("x"), Some(Type::Int), val42);
+/// inspect(let_stmt, content="let x: Int = 42")
+///
+/// // Mutable let statement
+/// let mut_stmt = Stmt::LetMut(Ident("counter"), None, val42);
+/// inspect(mut_stmt, content="let mut counter = 42")
+///
+/// // Tuple destructuring let
+/// let bindings = [Binding::Ident(Ident("a")), Binding::Ident(Ident("b"))];
+/// let tuple_val = ValueExpr::TupleExpr([val42, val42]);
+/// let tuple_val = ApplyExpr::ValueExpr(tuple_val);
+/// let tuple_val = IfLevelExpr::ApplyExpr(tuple_val);
+/// let tuple_val = Expr::IfLevelExpr(tuple_val);
+/// let tuple_stmt = Stmt::LetTupe(bindings, None, tuple_val);
+/// inspect(tuple_stmt, content="let (a, b) = (42, 42)")
+///
+/// // Assignment statement
+/// let left_val = LeftValue::Ident(Ident("x"));
+/// let assign_stmt = Stmt::Assign(left_val, val42);
+/// inspect(assign_stmt, content="x = 42")
+///
+/// // While loop
+/// let cond = ValueExpr::BoolExpr(true);
+/// let cond = ApplyExpr::ValueExpr(cond);
+/// let cond = IfLevelExpr::ApplyExpr(cond);
+/// let cond = Expr::IfLevelExpr(cond);
+/// let body = BlockExpr::{ nested_level: 0, stmts: [], last_expr: None };
+/// let while_stmt = Stmt::While(cond, body);
+/// inspect(while_stmt, content="while true {\n}")
+///
+/// // Return statement
+/// let return_stmt = Stmt::Return(val42);
+/// inspect(return_stmt, content="return 42")
+///
+/// // Expression statement
+/// let expr_stmt = Stmt::ExprStmt(val42);
+/// inspect(expr_stmt, content="42")
+/// ```
 pub(all) enum Stmt {
   LetTupe(Array[Binding], Type?, Expr)
   LetMut(Ident, Type?, Expr)
