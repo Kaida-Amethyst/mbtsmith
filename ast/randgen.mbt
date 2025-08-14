@@ -1,4 +1,4 @@
-/// 新的随机程序生成器 - 基于csmith思路，专注于生成类型安全的MiniMoonbit程序
+/// 增强的随机程序生成器 - 基于csmith思路，专注于生成复杂的类型安全的MiniMoonbit程序
 
 /// 环境管理 - 用于跟踪变量和类型绑定
 struct Env[K, V] {
@@ -45,12 +45,14 @@ fn Env::collect_vars_of_type[K, V : Eq](self: Self[K, V], target_type: V) -> Arr
 pub struct RandomGenerator {
   rand: @random.Rand
   
-  // 配置参数
+  // 增强的配置参数，支持生成更复杂的程序
   max_depth: Int
   max_stmt_count: Int
   max_array_size: Int
   max_tuple_size: Int
   max_func_params: Int
+  max_nested_level: Int
+  total_lines_target: Int
   
   // 环境
   mut var_env: Env[Ident, Type]     // 变量类型环境
@@ -68,16 +70,22 @@ pub struct RandomGenerator {
   // 当前上下文
   mut current_return_type: Type
   mut current_depth: Int
+  mut current_nested_level: Int
+  
+  // 行数统计
+  mut current_lines: Int
 }
 
 pub fn RandomGenerator::new() -> RandomGenerator {
   {
     rand: @random.Rand::new(),
-    max_depth: 5,
-    max_stmt_count: 15,
-    max_array_size: 5,
-    max_tuple_size: 4,
-    max_func_params: 4,
+    max_depth: 4,               // 减少最大深度避免栈溢出
+    max_stmt_count: 15,         // 适中的语句数量
+    max_array_size: 5,          // 适中的数组大小
+    max_tuple_size: 4,          // 适中的元组大小
+    max_func_params: 4,         // 适中的函数参数数量
+    max_nested_level: 3,        // 减少嵌套层级限制
+    total_lines_target: 2000,   // 目标行数
     var_env: Env::new(),
     mutable_vars: Env::new(),
     type_env: Env::new(),
@@ -88,6 +96,8 @@ pub fn RandomGenerator::new() -> RandomGenerator {
 
     current_return_type: Unit,
     current_depth: 0,
+    current_nested_level: 0,
+    current_lines: 0,
   }
 }
 
@@ -102,7 +112,7 @@ fn RandomGenerator::rand_bool(self: Self) -> Bool {
 }
 
 fn RandomGenerator::rand_double(self: Self) -> Double {
-  self.rand.double()
+  self.rand.double() * 1000.0  // 扩大范围，生成更多样的浮点数
 }
 
 fn RandomGenerator::choice[T](self: Self, choices: Array[T]) -> T? {
@@ -113,16 +123,44 @@ fn RandomGenerator::choice[T](self: Self, choices: Array[T]) -> T? {
   }
 }
 
+fn RandomGenerator::weighted_choice[T](self: Self, choices: Array[(T, Int)]) -> T? {
+  if choices.is_empty() {
+    return None
+  }
+  
+  let total_weight = choices.fold(init=0, fn(acc, choice) { acc + choice.1 })
+  if total_weight <= 0 {
+    return self.choice(choices.map(fn(choice) { choice.0 }))
+  }
+  
+  let mut current_weight = 0
+  let target_weight = self.rand_int(total_weight)
+  
+  for choice in choices {
+    current_weight = current_weight + choice.1
+    if current_weight > target_weight {
+      return Some(choice.0)
+    }
+  }
+  
+  // 备用选择
+  self.choice(choices.map(fn(choice) { choice.0 }))
+}
+
 /// 生成标识符
 fn RandomGenerator::gen_ident(self: Self) -> Ident {
-  let names = ["x", "y", "z", "a", "b", "c", "value", "temp", "result", "data", "item", "elem", "i", "j", "k"]
+  let names = ["x", "y", "z", "a", "b", "c", "value", "temp", "result", "data", "item", "elem", "i", "j", "k", 
+               "count", "sum", "index", "flag", "status", "info", "node", "next", "prev", "head", "tail",
+               "left", "right", "top", "bottom", "min", "max", "first", "last", "current", "target"]
   let base_name = self.choice(names).unwrap()
   self.name_counter = self.name_counter + 1
   Ident(base_name + self.name_counter.to_string())
 }
 
 fn RandomGenerator::gen_upper(self: Self) -> Upper {
-  let names = ["Point", "Node", "Item", "Data", "Result", "Option", "List", "Tree", "Value", "Container"]
+  let names = ["Point", "Node", "Item", "Data", "Result", "Option", "List", "Tree", "Value", "Container",
+               "Record", "Entry", "Element", "Structure", "Entity", "Object", "Instance", "State", "Config",
+               "Context", "Buffer", "Cache", "Queue", "Stack", "Matrix", "Vector", "Complex", "Wrapper"]
   let base_name = self.choice(names).unwrap()
   self.name_counter = self.name_counter + 1
   Upper(base_name + self.name_counter.to_string())
@@ -138,25 +176,85 @@ fn RandomGenerator::gen_basic_type(self: Self) -> Type {
   }
 }
 
-/// 生成复合类型
+/// 增强的类型生成器，支持更复杂的嵌套类型
 fn RandomGenerator::gen_type(self: Self, allow_complex: Bool) -> Type {
-  if self.current_depth >= self.max_depth || not(allow_complex) {
+  if self.current_nested_level >= self.max_nested_level || not(allow_complex) || self.current_depth >= self.max_depth - 1 {
     return self.gen_basic_type()
   }
   
-  match self.rand_int(4) {
-    0 | 1 | 2 => self.gen_basic_type()
-    _ => self.gen_tuple_type()  // 只生成元组类型，避免Array导致的导入问题
+  // 使用加权选择，基础类型权重更高，保证程序可编译
+  let choices = [
+    (0, 60),  // 基础类型 - 提高权重
+    (1, 15),  // 数组类型 - 降低权重  
+    (2, 20),  // 元组类型 - 降低权重
+    (3, 3),   // 自定义结构体 - 大幅降低权重
+    (4, 2),   // 自定义枚举 - 大幅降低权重
+  ]
+  
+  match self.weighted_choice(choices) {
+    Some(0) => self.gen_basic_type()
+    Some(1) => self.gen_array_type()
+    Some(2) => self.gen_tuple_type()
+    Some(3) => self.gen_custom_struct_type()
+    Some(4) => self.gen_custom_enum_type()
+    _ => self.gen_basic_type()
   }
+}
+
+fn RandomGenerator::gen_array_type(self: Self) -> Type {
+  self.current_nested_level = self.current_nested_level + 1
+  let element_type = self.gen_type(true)
+  self.current_nested_level = self.current_nested_level - 1
+  Array(element_type)
 }
 
 fn RandomGenerator::gen_tuple_type(self: Self) -> Type {
   let size = self.rand_int(self.max_tuple_size - 1) + 2  // 至少2个元素
   let types = Array::new()
+  
+  self.current_nested_level = self.current_nested_level + 1
   for i = 0; i < size; i = i + 1 {
-    types.push(self.gen_type(false))
+    types.push(self.gen_type(self.current_nested_level < self.max_nested_level - 1))
   }
+  self.current_nested_level = self.current_nested_level - 1
+  
   Tuple(types)
+}
+
+fn RandomGenerator::gen_custom_struct_type(self: Self) -> Type {
+  // 从已定义的结构体中随机选择一个
+  let available_structs = Array::new()
+  self.struct_defs.each(fn(name, struct_def) {
+    available_structs.push(name)
+  })
+  
+  match self.choice(available_structs) {
+    Some(struct_name) => {
+      match self.struct_defs.get(struct_name) {
+        Some(struct_def) => struct_def.type_of()
+        None => self.gen_basic_type()  // 备用方案
+      }
+    }
+    None => self.gen_basic_type()  // 如果没有可用的结构体，返回基础类型
+  }
+}
+
+fn RandomGenerator::gen_custom_enum_type(self: Self) -> Type {
+  // 从已定义的枚举中随机选择一个
+  let available_enums = Array::new()
+  self.enum_defs.each(fn(name, enum_def) {
+    available_enums.push(name)
+  })
+  
+  match self.choice(available_enums) {
+    Some(enum_name) => {
+      match self.enum_defs.get(enum_name) {
+        Some(enum_def) => enum_def.type_of()
+        None => self.gen_basic_type()  // 备用方案
+      }
+    }
+    None => self.gen_basic_type()  // 如果没有可用的枚举，返回基础类型
+  }
 }
 
 /// 查找指定类型的变量
@@ -165,21 +263,60 @@ fn RandomGenerator::find_var_of_type(self: Self, target_type: Type) -> Ident? {
   self.choice(vars)
 }
 
-/// 生成简单的字面量表达式
+/// 查找指定类型的所有变量
+fn RandomGenerator::find_all_vars_of_type(self: Self, target_type: Type) -> Array[Ident] {
+  self.var_env.collect_vars_of_type(target_type)
+}
+
+/// 生成复杂的字面量表达式
 fn RandomGenerator::gen_literal_expr(self: Self, ty: Type) -> Expr {
   match ty {
     Unit => IfLevelExpr(ApplyExpr(ValueExpr(UnitExpr)))
     Bool => IfLevelExpr(ApplyExpr(ValueExpr(BoolExpr(self.rand_bool()))))
-    Int => IfLevelExpr(ApplyExpr(ValueExpr(IntExpr(self.rand_int(1000)))))
-    Double => IfLevelExpr(ApplyExpr(ValueExpr(FloatExpr(self.rand_double()))))
-    Tuple(elem_types) => {
-      let elements = Array::new()
-      for elem_type in elem_types {
-        elements.push(self.gen_literal_expr(elem_type))
+    Int => {
+      // 生成更多样的整数
+      let value = match self.rand_int(4) {
+        0 => self.rand_int(10)           // 小整数 0-9
+        1 => self.rand_int(1000)         // 中等整数 0-999
+        2 => self.rand_int(100000)       // 大整数 0-99999
+        _ => self.rand_int(2) * 2 - 1    // -1 或 1
       }
-      IfLevelExpr(ApplyExpr(ValueExpr(TupleExpr(elements))))
+      IfLevelExpr(ApplyExpr(ValueExpr(IntExpr(value))))
     }
-    _ => IfLevelExpr(ApplyExpr(ValueExpr(UnitExpr)))  // 对于其他复杂类型，返回Unit
+    Double => {
+      let value = self.rand_double()
+      IfLevelExpr(ApplyExpr(ValueExpr(FloatExpr(value))))
+    }
+    Array(elem_type) => self.gen_array_expr(elem_type)
+    Tuple(elem_types) => self.gen_tuple_expr(elem_types)
+    Struct(name, fields) => self.gen_struct_construct_expr(name, fields)
+    Enum(name, variants) => self.gen_enum_construct_expr(name, variants)
+    _ => IfLevelExpr(ApplyExpr(ValueExpr(UnitExpr)))  // 对于其他类型，返回Unit
+  }
+}
+
+/// 生成结构体构造表达式
+fn RandomGenerator::gen_struct_construct_expr(self: Self, name: Upper, fields: Array[(Ident, Type)]) -> Expr {
+  let field_assignments = Array::new()
+  for field in fields {
+    let (field_name, field_type) = field
+    let field_value = self.gen_expr(field_type, true)  // 字段值使用简单表达式
+    field_assignments.push((field_name, field_value))
+  }
+  IfLevelExpr(ApplyExpr(ValueExpr(StructConstruct(name, field_assignments))))
+}
+
+/// 生成枚举构造表达式
+fn RandomGenerator::gen_enum_construct_expr(self: Self, name: Upper, variants: Array[(Upper, Array[Type])]) -> Expr {
+  match self.choice(variants) {
+    Some((variant_name, variant_types)) => {
+      let field_values = Array::new()
+      for variant_type in variant_types {
+        field_values.push(self.gen_expr(variant_type, true))
+      }
+      IfLevelExpr(ApplyExpr(ValueExpr(EnumConstruct(Some(name), variant_name, field_values))))
+    }
+    None => IfLevelExpr(ApplyExpr(ValueExpr(UnitExpr)))  // 如果没有变体，返回Unit
   }
 }
 
@@ -191,25 +328,34 @@ fn RandomGenerator::gen_var_expr(self: Self, ty: Type) -> Expr? {
   }
 }
 
-/// 生成数组表达式
+/// 生成复杂的数组表达式
 fn RandomGenerator::gen_array_expr(self: Self, elem_type: Type) -> Expr {
-  if self.rand_bool() {
-    // Array::make(size, init_value)
-    let size_expr = self.gen_literal_expr(Int)
-    let init_expr = self.gen_expr(elem_type, true)
-    IfLevelExpr(ApplyExpr(ValueExpr(ArrayMake(size_expr, init_expr))))
-  } else {
-    // [elem1, elem2, ...]
-    let size = self.rand_int(self.max_array_size) + 1
-    let elements = Array::new()
-    for i = 0; i < size; i = i + 1 {
-      elements.push(self.gen_expr(elem_type, true))
+  match self.rand_int(3) {
+    0 => {
+      // Array::make(size, init_value)
+      let size_val = self.rand_int(self.max_array_size) + 1
+      let size_expr = IfLevelExpr(ApplyExpr(ValueExpr(IntExpr(size_val))))
+      let init_expr = self.gen_expr(elem_type, true)
+      IfLevelExpr(ApplyExpr(ValueExpr(ArrayMake(size_expr, init_expr))))
     }
-    IfLevelExpr(ApplyExpr(ValueExpr(ArrayExpr(elements))))
+    1 => {
+      // [elem1, elem2, ...]
+      let size = self.rand_int(self.max_array_size) + 1
+      let elements = Array::new()
+      for i = 0; i < size; i = i + 1 {
+        elements.push(self.gen_expr(elem_type, true))
+      }
+      IfLevelExpr(ApplyExpr(ValueExpr(ArrayExpr(elements))))
+    }
+    _ => {
+      // 尝试从现有变量生成数组，或创建空数组
+      let empty_array = Array::new()
+      IfLevelExpr(ApplyExpr(ValueExpr(ArrayExpr(empty_array))))
+    }
   }
 }
 
-/// 生成元组表达式
+/// 生成复杂的元组表达式
 fn RandomGenerator::gen_tuple_expr(self: Self, elem_types: Array[Type]) -> Expr {
   let elements = Array::new()
   for elem_type in elem_types {
@@ -218,13 +364,99 @@ fn RandomGenerator::gen_tuple_expr(self: Self, elem_types: Array[Type]) -> Expr 
   IfLevelExpr(ApplyExpr(ValueExpr(TupleExpr(elements))))
 }
 
-/// 生成表达式
+/// 生成函数调用表达式
+fn RandomGenerator::gen_function_call_expr(self: Self, expected_return_type: Type) -> Expr? {
+  // 查找返回类型匹配的函数
+  let available_funcs = Array::new()
+  self.func_defs.each(fn(func_name, func_def) {
+    if func_def.ret_ty == expected_return_type {
+      available_funcs.push((func_name, func_def))
+    }
+  })
+  
+  match self.choice(available_funcs) {
+    Some((func_name, func_def)) => {
+      let args = Array::new()
+      for param in func_def.params {
+        let (_, param_type) = param
+        args.push(self.gen_expr(param_type, true))
+      }
+      let func_apply = ApplyExpr::ValueExpr(ValueExpr::IdentExpr(func_name))
+      Some(IfLevelExpr(ApplyExpr(Call(func_apply, args))))
+    }
+    None => None
+  }
+}
+
+/// 生成数组访问表达式
+fn RandomGenerator::gen_array_access_expr(self: Self, elem_type: Type) -> Expr? {
+  // 查找数组类型的变量
+  let array_vars = self.find_all_vars_of_type(Array(elem_type))
+  match self.choice(array_vars) {
+    Some(array_var) => {
+      let index_expr = self.gen_expr(Int, true)
+      let array_apply = ApplyExpr::ValueExpr(ValueExpr::IdentExpr(array_var))
+      Some(IfLevelExpr(ApplyExpr(ArrAcc(array_apply, index_expr))))
+    }
+    None => None
+  }
+}
+
+/// 生成点访问表达式（结构体字段访问）
+fn RandomGenerator::gen_dot_access_expr(self: Self, expected_type: Type) -> Expr? {
+  // 查找具有匹配字段类型的结构体变量
+  let candidates = Array::new()
+  
+  self.var_env.map.each(fn(var_name, var_type) {
+    match var_type {
+      Struct(struct_name, fields) => {
+        for field in fields {
+          let (field_name, field_type) = field
+          if field_type == expected_type {
+            candidates.push((var_name, field_name))
+          }
+        }
+      }
+      _ => ()
+    }
+  })
+  
+  match self.choice(candidates) {
+    Some((var_name, field_name)) => {
+      let struct_apply = ApplyExpr::ValueExpr(ValueExpr::IdentExpr(var_name))
+      Some(IfLevelExpr(ApplyExpr(DotAcc(struct_apply, field_name))))
+    }
+    None => None
+  }
+}
+
+/// 增强的表达式生成器，支持更复杂的表达式结构
 fn RandomGenerator::gen_expr(self: Self, ty: Type, simple: Bool) -> Expr {
   if self.current_depth >= self.max_depth || simple {
     // 在最大深度或要求简单表达式时，优先生成字面量或变量引用
-    match self.rand_int(3) {
-      0 => {
+    let choices = [
+      (0, 40), // 字面量 - 权重40
+      (1, 30), // 变量引用 - 权重30
+      (2, 20), // 函数调用 - 权重20
+      (3, 10), // 字段访问 - 权重10
+    ]
+    
+    match self.weighted_choice(choices) {
+      Some(0) => self.gen_literal_expr(ty)
+      Some(1) => {
         match self.gen_var_expr(ty) {
+          Some(expr) => expr
+          None => self.gen_literal_expr(ty)
+        }
+      }
+      Some(2) => {
+        match self.gen_function_call_expr(ty) {
+          Some(expr) => expr
+          None => self.gen_literal_expr(ty)
+        }
+      }
+      Some(3) => {
+        match self.gen_dot_access_expr(ty) {
           Some(expr) => expr
           None => self.gen_literal_expr(ty)
         }
@@ -234,62 +466,314 @@ fn RandomGenerator::gen_expr(self: Self, ty: Type, simple: Bool) -> Expr {
   } else {
     self.current_depth = self.current_depth + 1
     let result = match ty {
-      Unit | Bool | Int | Double => {
-        match self.rand_int(4) {
-          0 => self.gen_literal_expr(ty)
-          1 => {
-            match self.gen_var_expr(ty) {
-              Some(expr) => expr
-              None => self.gen_literal_expr(ty)
-            }
-          }
-          2 => {
-            if ty == Int || ty == Double {
-              self.gen_arithmetic_expr(ty)
-            } else {
-              self.gen_literal_expr(ty)
-            }
-          }
-          _ => {
-            if ty == Bool {
-              self.gen_comparison_expr()
-            } else {
-              self.gen_literal_expr(ty)
-            }
-          }
-        }
-      }
-      Array(elem_type) => {
-        match self.rand_int(3) {
-          0 => {
-            match self.gen_var_expr(ty) {
-              Some(expr) => expr
-              None => self.gen_array_expr(elem_type)
-            }
-          }
-          _ => self.gen_array_expr(elem_type)
-        }
-      }
-      Tuple(elem_types) => {
-        match self.rand_int(3) {
-          0 => {
-            match self.gen_var_expr(ty) {
-              Some(expr) => expr
-              None => self.gen_tuple_expr(elem_types)
-            }
-          }
-          _ => self.gen_tuple_expr(elem_types)
-        }
-      }
-      _ => self.gen_literal_expr(Unit)
+      Unit => self.gen_complex_unit_expr()
+      Bool => self.gen_complex_bool_expr()
+      Int => self.gen_complex_int_expr()
+      Double => self.gen_complex_double_expr()
+      Array(elem_type) => self.gen_complex_array_expr(elem_type)
+      Tuple(elem_types) => self.gen_complex_tuple_expr(elem_types)
+      Struct(name, fields) => self.gen_complex_struct_expr(name, fields)
+      Enum(name, variants) => self.gen_complex_enum_expr(name, variants)
+      _ => self.gen_literal_expr(ty)
     }
     self.current_depth = self.current_depth - 1
     result
   }
 }
 
+/// 生成复杂的Unit表达式
+fn RandomGenerator::gen_complex_unit_expr(self: Self) -> Expr {
+  let choices = [
+    (0, 50), // 字面量Unit
+    (1, 20), // 变量引用
+    (2, 15), // 函数调用
+    (3, 15), // 表达式语句
+  ]
+  
+  match self.weighted_choice(choices) {
+    Some(0) => self.gen_literal_expr(Unit)
+    Some(1) => {
+      match self.gen_var_expr(Unit) {
+        Some(expr) => expr
+        None => self.gen_literal_expr(Unit)
+      }
+    }
+    Some(2) => {
+      match self.gen_function_call_expr(Unit) {
+        Some(expr) => expr
+        None => self.gen_literal_expr(Unit)
+      }
+    }
+    Some(3) => {
+      // 生成一个包含其他表达式的组合表达式
+      let inner_expr = self.gen_expr(Int, true)
+      IfLevelExpr(ApplyExpr(ValueExpr(GroupExpr(inner_expr))))
+    }
+    _ => self.gen_literal_expr(Unit)
+  }
+}
+
+/// 生成复杂的Bool表达式
+fn RandomGenerator::gen_complex_bool_expr(self: Self) -> Expr {
+  let choices = [
+    (0, 25), // 字面量Bool
+    (1, 20), // 变量引用
+    (2, 20), // 比较表达式
+    (3, 15), // 逻辑表达式
+    (4, 10), // 函数调用
+    (5, 10), // 取反表达式
+  ]
+  
+  match self.weighted_choice(choices) {
+    Some(0) => self.gen_literal_expr(Bool)
+    Some(1) => {
+      match self.gen_var_expr(Bool) {
+        Some(expr) => expr
+        None => self.gen_literal_expr(Bool)
+      }
+    }
+    Some(2) => self.gen_comparison_expr()
+    Some(3) => self.gen_logical_expr()
+    Some(4) => {
+      match self.gen_function_call_expr(Bool) {
+        Some(expr) => expr
+        None => self.gen_literal_expr(Bool)
+      }
+    }
+    Some(5) => {
+      let inner_expr = self.gen_expr(Bool, true)
+      IfLevelExpr(ApplyExpr(ValueExpr(NotExpr(inner_expr))))
+    }
+    _ => self.gen_literal_expr(Bool)
+  }
+}
+
+/// 生成复杂的Int表达式
+fn RandomGenerator::gen_complex_int_expr(self: Self) -> Expr {
+  let choices = [
+    (0, 25), // 字面量Int
+    (1, 20), // 变量引用
+    (2, 25), // 算术表达式
+    (3, 15), // 函数调用
+    (4, 10), // 数组访问
+    (5, 5),  // 字段访问
+  ]
+  
+  match self.weighted_choice(choices) {
+    Some(0) => self.gen_literal_expr(Int)
+    Some(1) => {
+      match self.gen_var_expr(Int) {
+        Some(expr) => expr
+        None => self.gen_literal_expr(Int)
+      }
+    }
+    Some(2) => self.gen_arithmetic_expr(Int)
+    Some(3) => {
+      match self.gen_function_call_expr(Int) {
+        Some(expr) => expr
+        None => self.gen_literal_expr(Int)
+      }
+    }
+    Some(4) => {
+      match self.gen_array_access_expr(Int) {
+        Some(expr) => expr
+        None => self.gen_literal_expr(Int)
+      }
+    }
+    Some(5) => {
+      match self.gen_dot_access_expr(Int) {
+        Some(expr) => expr
+        None => self.gen_literal_expr(Int)
+      }
+    }
+    _ => self.gen_literal_expr(Int)
+  }
+}
+
+/// 生成复杂的Double表达式
+fn RandomGenerator::gen_complex_double_expr(self: Self) -> Expr {
+  let choices = [
+    (0, 25), // 字面量Double
+    (1, 20), // 变量引用
+    (2, 25), // 算术表达式
+    (3, 15), // 函数调用
+    (4, 10), // 数组访问
+    (5, 5),  // 字段访问
+  ]
+  
+  match self.weighted_choice(choices) {
+    Some(0) => self.gen_literal_expr(Double)
+    Some(1) => {
+      match self.gen_var_expr(Double) {
+        Some(expr) => expr
+        None => self.gen_literal_expr(Double)
+      }
+    }
+    Some(2) => self.gen_arithmetic_expr(Double)
+    Some(3) => {
+      match self.gen_function_call_expr(Double) {
+        Some(expr) => expr
+        None => self.gen_literal_expr(Double)
+      }
+    }
+    Some(4) => {
+      match self.gen_array_access_expr(Double) {
+        Some(expr) => expr
+        None => self.gen_literal_expr(Double)
+      }
+    }
+    Some(5) => {
+      match self.gen_dot_access_expr(Double) {
+        Some(expr) => expr
+        None => self.gen_literal_expr(Double)
+      }
+    }
+    _ => self.gen_literal_expr(Double)
+  }
+}
+
+/// 生成复杂的Array表达式
+fn RandomGenerator::gen_complex_array_expr(self: Self, elem_type: Type) -> Expr {
+  let choices = [
+    (0, 30), // 数组字面量
+    (1, 25), // 变量引用
+    (2, 20), // Array::make
+    (3, 15), // 函数调用
+    (4, 10), // 字段访问
+  ]
+  
+  match self.weighted_choice(choices) {
+    Some(0) => self.gen_array_expr(elem_type)
+    Some(1) => {
+      match self.gen_var_expr(Array(elem_type)) {
+        Some(expr) => expr
+        None => self.gen_array_expr(elem_type)
+      }
+    }
+    Some(2) => {
+      let size_val = self.rand_int(self.max_array_size) + 1
+      let size_expr = IfLevelExpr(ApplyExpr(ValueExpr(IntExpr(size_val))))
+      let init_expr = self.gen_expr(elem_type, false)
+      IfLevelExpr(ApplyExpr(ValueExpr(ArrayMake(size_expr, init_expr))))
+    }
+    Some(3) => {
+      match self.gen_function_call_expr(Array(elem_type)) {
+        Some(expr) => expr
+        None => self.gen_array_expr(elem_type)
+      }
+    }
+    Some(4) => {
+      match self.gen_dot_access_expr(Array(elem_type)) {
+        Some(expr) => expr
+        None => self.gen_array_expr(elem_type)
+      }
+    }
+    _ => self.gen_array_expr(elem_type)
+  }
+}
+
+/// 生成复杂的Tuple表达式
+fn RandomGenerator::gen_complex_tuple_expr(self: Self, elem_types: Array[Type]) -> Expr {
+  let choices = [
+    (0, 40), // 元组字面量
+    (1, 25), // 变量引用
+    (2, 20), // 函数调用
+    (3, 15), // 字段访问
+  ]
+  
+  match self.weighted_choice(choices) {
+    Some(0) => self.gen_tuple_expr(elem_types)
+    Some(1) => {
+      match self.gen_var_expr(Tuple(elem_types)) {
+        Some(expr) => expr
+        None => self.gen_tuple_expr(elem_types)
+      }
+    }
+    Some(2) => {
+      match self.gen_function_call_expr(Tuple(elem_types)) {
+        Some(expr) => expr
+        None => self.gen_tuple_expr(elem_types)
+      }
+    }
+    Some(3) => {
+      match self.gen_dot_access_expr(Tuple(elem_types)) {
+        Some(expr) => expr
+        None => self.gen_tuple_expr(elem_types)
+      }
+    }
+    _ => self.gen_tuple_expr(elem_types)
+  }
+}
+
+/// 生成复杂的Struct表达式
+fn RandomGenerator::gen_complex_struct_expr(self: Self, name: Upper, fields: Array[(Ident, Type)]) -> Expr {
+  let choices = [
+    (0, 40), // 结构体构造
+    (1, 30), // 变量引用
+    (2, 20), // 函数调用
+    (3, 10), // 字段访问
+  ]
+  
+  match self.weighted_choice(choices) {
+    Some(0) => self.gen_struct_construct_expr(name, fields)
+    Some(1) => {
+      match self.gen_var_expr(Struct(name, fields)) {
+        Some(expr) => expr
+        None => self.gen_struct_construct_expr(name, fields)
+      }
+    }
+    Some(2) => {
+      match self.gen_function_call_expr(Struct(name, fields)) {
+        Some(expr) => expr
+        None => self.gen_struct_construct_expr(name, fields)
+      }
+    }
+    Some(3) => {
+      match self.gen_dot_access_expr(Struct(name, fields)) {
+        Some(expr) => expr
+        None => self.gen_struct_construct_expr(name, fields)
+      }
+    }
+    _ => self.gen_struct_construct_expr(name, fields)
+  }
+}
+
+/// 生成复杂的Enum表达式
+fn RandomGenerator::gen_complex_enum_expr(self: Self, name: Upper, variants: Array[(Upper, Array[Type])]) -> Expr {
+  let choices = [
+    (0, 40), // 枚举构造
+    (1, 30), // 变量引用
+    (2, 20), // 函数调用
+    (3, 10), // 字段访问
+  ]
+  
+  match self.weighted_choice(choices) {
+    Some(0) => self.gen_enum_construct_expr(name, variants)
+    Some(1) => {
+      match self.gen_var_expr(Enum(name, variants)) {
+        Some(expr) => expr
+        None => self.gen_enum_construct_expr(name, variants)
+      }
+    }
+    Some(2) => {
+      match self.gen_function_call_expr(Enum(name, variants)) {
+        Some(expr) => expr
+        None => self.gen_enum_construct_expr(name, variants)
+      }
+    }
+    Some(3) => {
+      match self.gen_dot_access_expr(Enum(name, variants)) {
+        Some(expr) => expr
+        None => self.gen_enum_construct_expr(name, variants)
+      }
+    }
+    _ => self.gen_enum_construct_expr(name, variants)
+  }
+}
+
 /// 生成算术表达式 (仅适用于Int和Double)
 fn RandomGenerator::gen_arithmetic_expr(self: Self, ty: Type) -> Expr {
+  // 始终生成简单的双操作数表达式，避免无限递归
   let left = self.gen_expr(ty, true)
   let right = self.gen_expr(ty, true)
   
@@ -305,9 +789,14 @@ fn RandomGenerator::gen_arithmetic_expr(self: Self, ty: Type) -> Expr {
 /// 生成比较表达式 (返回Bool)
 fn RandomGenerator::gen_comparison_expr(self: Self) -> Expr {
   let ty = if self.rand_bool() { Int } else { Double }
+  
+  // 生成简单比较，避免递归复杂度
   let left = self.gen_expr(ty, true)
   let right = self.gen_expr(ty, true)
-  
+  self.make_comparison(left, right)
+}
+
+fn RandomGenerator::make_comparison(self: Self, left: Expr, right: Expr) -> Expr {
   let op = match self.rand_int(6) {
     0 => Eq
     1 => Ne
@@ -316,25 +805,68 @@ fn RandomGenerator::gen_comparison_expr(self: Self) -> Expr {
     4 => Gt
     _ => Ge
   }
-  
   CmpExpr(op, left, right)
 }
 
-/// 生成语句
+/// 生成逻辑表达式 (返回Bool)
+fn RandomGenerator::gen_logical_expr(self: Self) -> Expr {
+  match self.rand_int(2) {
+    0 => {
+      // AND 表达式
+      let left = self.gen_expr(Bool, true)  // 使用简单表达式
+      let right = self.gen_expr(Bool, true)
+      AndExpr(left, right)
+    }
+    _ => {
+      // OR 表达式
+      let left = self.gen_expr(Bool, true)  // 使用简单表达式
+      let right = self.gen_expr(Bool, true)
+      OrExpr(left, right)
+    }
+  }
+}
+
+/// 增强的语句生成器，支持更多种类的语句
 fn RandomGenerator::gen_stmt(self: Self) -> Stmt {
-  // 在深度较大时，避免生成复杂的语句（如while循环）
+  // 根据深度和行数目标调整语句复杂度
   if self.current_depth >= self.max_depth - 1 {
-    match self.rand_int(3) {
-      0 => self.gen_let_stmt()
-      1 => self.gen_expr_stmt()
+    // 在深度较大时，生成简单语句
+    let choices = [
+      (0, 40), // let语句
+      (1, 25), // 表达式语句
+      (2, 20), // let mut语句
+      (3, 15), // 赋值语句
+    ]
+    
+    match self.weighted_choice(choices) {
+      Some(0) => self.gen_let_stmt()
+      Some(1) => self.gen_expr_stmt()
+      Some(2) => self.gen_let_mut_stmt()
+      Some(3) => self.gen_assign_stmt()
       _ => self.gen_let_stmt()
     }
   } else {
-    match self.rand_int(5) {
-      0 => self.gen_let_stmt()
-      1 => self.gen_let_mut_stmt()
-      2 => self.gen_assign_stmt()
-      3 => self.gen_expr_stmt()
+    // 在较浅深度时，可以生成更复杂的语句
+    let choices = [
+      (0, 25), // let语句
+      (1, 20), // let mut语句
+      (2, 15), // 赋值语句
+      (3, 15), // 表达式语句
+      (4, 10), // while循环
+      (5, 8),  // 元组解构let
+      (6, 4),  // return语句
+      (7, 3),  // 局部函数定义
+    ]
+    
+    match self.weighted_choice(choices) {
+      Some(0) => self.gen_let_stmt()
+      Some(1) => self.gen_let_mut_stmt()
+      Some(2) => self.gen_assign_stmt()
+      Some(3) => self.gen_expr_stmt()
+      Some(4) => self.gen_while_stmt()
+      Some(5) => self.gen_let_tuple_stmt()
+      Some(6) => self.gen_return_stmt()
+      Some(7) => self.gen_local_func_def_stmt()
       _ => self.gen_let_stmt()
     }
   }
@@ -348,7 +880,8 @@ fn RandomGenerator::gen_let_stmt(self: Self) -> Stmt {
   // 将变量添加到环境中
   self.var_env.set(var_name, var_type)
   
-  let type_annotation = if self.rand_bool() { Some(var_type) } else { None }
+  // 更频繁地生成类型注解，提高代码可读性
+  let type_annotation = if self.rand_int(10) < 7 { Some(var_type) } else { None }
   Let(var_name, type_annotation, init_expr)
 }
 
@@ -361,8 +894,36 @@ fn RandomGenerator::gen_let_mut_stmt(self: Self) -> Stmt {
   self.var_env.set(var_name, var_type)
   self.mutable_vars.set(var_name, var_type)
   
-  let type_annotation = if self.rand_bool() { Some(var_type) } else { None }
+  let type_annotation = if self.rand_int(10) < 7 { Some(var_type) } else { None }
   LetMut(var_name, type_annotation, init_expr)
+}
+
+/// 生成元组解构let语句
+fn RandomGenerator::gen_let_tuple_stmt(self: Self) -> Stmt {
+  let tuple_size = self.rand_int(self.max_tuple_size - 1) + 2  // 至少2个元素
+  let bindings = Array::new()
+  let types = Array::new()
+  
+  for i = 0; i < tuple_size; i = i + 1 {
+    let elem_type = self.gen_type(false)
+    types.push(elem_type)
+    
+    if self.rand_bool() {
+      // 生成标识符绑定
+      let var_name = self.gen_ident()
+      self.var_env.set(var_name, elem_type)
+      bindings.push(Binding::Ident(var_name))
+    } else {
+      // 生成通配符绑定
+      bindings.push(Binding::WhileCard)
+    }
+  }
+  
+  let tuple_type = Type::Tuple(types)
+  let tuple_expr = self.gen_expr(tuple_type, false)
+  let type_annotation = if self.rand_bool() { Some(tuple_type) } else { None }
+  
+  LetTuple(bindings, type_annotation, tuple_expr)
 }
 
 fn RandomGenerator::gen_assign_stmt(self: Self) -> Stmt {
@@ -378,25 +939,103 @@ fn RandomGenerator::gen_assign_stmt(self: Self) -> Stmt {
   }
   
   let (var_name, var_type) = self.choice(mut_vars).unwrap()
-  let new_value = self.gen_expr(var_type, false)
   
-  Assign(Ident(var_name), new_value)
+  // 根据变量类型生成合适的左值
+  let left_value = if self.rand_int(10) < 8 {
+    // 简单变量赋值
+    LeftValue::Ident(var_name)
+  } else {
+    // 复杂左值（字段访问或数组访问）
+    match var_type {
+      Array(_) => {
+        // 数组元素赋值
+        let index_expr = self.gen_expr(Int, true)
+        LeftValue::ArrAcc(LeftValue::Ident(var_name), index_expr)
+      }
+      Struct(_, fields) if not(fields.is_empty()) => {
+        // 结构体字段赋值
+        let field = self.choice(fields).unwrap()
+        LeftValue::DotAcc(LeftValue::Ident(var_name), field.0)
+      }
+      _ => LeftValue::Ident(var_name)
+    }
+  }
+  
+  let new_value = self.gen_expr(var_type, false)
+  Assign(left_value, new_value)
 }
 
 fn RandomGenerator::gen_while_stmt(self: Self) -> Stmt {
   let cond = self.gen_expr(Bool, false)
+  
+  // 创建子环境来避免无限循环变量冲突
+  let old_var_env = self.var_env
+  let old_mut_env = self.mutable_vars
+  self.var_env = old_var_env.sub_env()
+  self.mutable_vars = old_mut_env.sub_env()
+  
   let body = self.gen_block_expr(Unit)
+  
+  // 恢复环境
+  self.var_env = old_var_env
+  self.mutable_vars = old_mut_env
+  
   While(cond, body)
 }
 
+fn RandomGenerator::gen_return_stmt(self: Self) -> Stmt {
+  let return_expr = self.gen_expr(self.current_return_type, false)
+  Return(return_expr)
+}
+
+fn RandomGenerator::gen_local_func_def_stmt(self: Self) -> Stmt {
+  let param_count = self.rand_int(self.max_func_params)
+  let params = Array::new()
+  
+  // 创建新的函数作用域
+  let old_var_env = self.var_env
+  self.var_env = old_var_env.sub_env()
+  
+  // 生成参数
+  for i = 0; i < param_count; i = i + 1 {
+    let param_name = self.gen_ident()
+    let param_type = self.gen_type(false)
+    params.push((param_name, Some(param_type)))
+    
+    // 将参数添加到函数环境中
+    self.var_env.set(param_name, param_type)
+  }
+  
+  // 生成返回类型和函数体
+  let ret_ty = self.gen_type(true)
+  let old_return_type = self.current_return_type
+  self.current_return_type = ret_ty
+  
+  let body = self.gen_block_expr(ret_ty)
+  
+  // 恢复环境
+  self.current_return_type = old_return_type
+  self.var_env = old_var_env
+  
+  LocalFuncDef(params, Some(ret_ty), body)
+}
+
 fn RandomGenerator::gen_expr_stmt(self: Self) -> Stmt {
-  let expr = self.gen_expr(Unit, false)
+  // 生成不同类型的表达式语句
+  let expr_type = match self.rand_int(4) {
+    0 => Unit
+    1 => Bool
+    2 => Int
+    _ => Double
+  }
+  
+  let expr = self.gen_expr(expr_type, false)
   ExprStmt(expr)
 }
 
-/// 生成代码块
+/// 增强的代码块生成器，支持更复杂的代码结构
 fn RandomGenerator::gen_block_expr(self: Self, return_type: Type) -> BlockExpr {
-  let block = BlockExpr::new()
+  let block = BlockExpr::new(nested_level=self.current_depth)
   
   // 检查递归深度，避免无限递归
   if self.current_depth >= self.max_depth {
@@ -416,17 +1055,44 @@ fn RandomGenerator::gen_block_expr(self: Self, return_type: Type) -> BlockExpr {
   self.mutable_vars = old_mut_env.sub_env()
   self.current_depth = self.current_depth + 1
   
-  // 生成较少的语句
-  let stmt_count = self.rand_int(5) + 1  // 减少语句数量，避免过深的嵌套
+  // 根据目标行数动态调整语句数量
+  let base_stmt_count = if self.current_lines < self.total_lines_target / 2 {
+    // 如果当前行数少于目标的一半，生成更多语句
+    self.rand_int(25) + 15  // 15-39个语句
+  } else if self.current_lines < self.total_lines_target * 3 / 4 {
+    // 如果接近目标，适中数量
+    self.rand_int(15) + 10  // 10-24个语句
+  } else {
+    // 如果接近或超过目标，较少语句
+    self.rand_int(8) + 5   // 5-12个语句
+  }
+  
+  let stmt_count = if self.current_depth <= 2 { 
+    base_stmt_count 
+  } else { 
+    base_stmt_count / (self.current_depth - 1)  // 深度越大，语句越少
+  }
+  
   for i = 0; i < stmt_count; i = i + 1 {
     let stmt = self.gen_stmt()
     block.push(stmt)
+    self.current_lines = self.current_lines + self.estimate_stmt_lines(stmt)
+    
+    // 如果已经达到目标行数，停止生成更多语句
+    if self.current_lines >= self.total_lines_target {
+      break
+    }
   }
   
   // 生成返回表达式（如果需要）
   if return_type != Unit {
-    let last_expr = self.gen_literal_expr(return_type)  // 强制生成匹配类型的字面量表达式
+    let last_expr = if self.rand_bool() {
+      self.gen_literal_expr(return_type)  // 有时生成字面量
+    } else {
+      self.gen_expr(return_type, false)   // 有时生成复杂表达式
+    }
     block.set_last_expr(last_expr)
+    self.current_lines = self.current_lines + 1
   }
   
   // 恢复环境
@@ -437,11 +1103,41 @@ fn RandomGenerator::gen_block_expr(self: Self, return_type: Type) -> BlockExpr {
   block
 }
 
-/// 生成顶层定义
+/// 估算语句的行数（用于控制总行数）
+fn RandomGenerator::estimate_stmt_lines(self: Self, stmt: Stmt) -> Int {
+  match stmt {
+    Let(_, _, _) => 1
+    LetMut(_, _, _) => 1  
+    LetTuple(bindings, _, _) => 1
+    Assign(_, _) => 1
+    ExprStmt(_) => 1
+    Return(_) => 1
+    LocalFuncDef(params, _, body) => 2 + params.length() + self.estimate_block_lines(body)
+    While(_, body) => 1 + self.estimate_block_lines(body)
+  }
+}
+
+/// 估算代码块的行数
+fn RandomGenerator::estimate_block_lines(self: Self, block: BlockExpr) -> Int {
+  let lines = 2  // { 和 }
+  let stmt_lines = block.stmts.fold(init=0, fn(acc, stmt) { 
+    acc + self.estimate_stmt_lines(stmt) 
+  })
+  let expr_lines = match block.last_expr {
+    Some(_) => 1
+    None => 0
+  }
+  lines + stmt_lines + expr_lines
+}
+
+/// 增强的顶层定义生成器
 pub fn RandomGenerator::gen_top_let(self: Self) -> TopLet {
   let name = self.gen_ident()
   let ty = self.gen_type(true)
   let value = self.gen_expr(ty, false)
+  
+  // 将全局变量添加到环境中
+  self.var_env.set(name, ty)
   
   // 总是生成类型注解以确保类型安全
   let type_annotation = Some(ty)
@@ -450,12 +1146,12 @@ pub fn RandomGenerator::gen_top_let(self: Self) -> TopLet {
 
 pub fn RandomGenerator::gen_struct_def(self: Self) -> StructDef {
   let name = self.gen_upper()
-  let field_count = self.rand_int(5) + 1  // 1-5个字段
+  let field_count = self.rand_int(8) + 1  // 1-8个字段，增加复杂度
   let fields = Array::new()
   
   for i = 0; i < field_count; i = i + 1 {
     let field_name = self.gen_ident()
-    let field_type = self.gen_type(false)  // 字段类型保持简单
+    let field_type = self.gen_type(true)  // 允许复杂字段类型
     fields.push((field_name, field_type))
   }
   
@@ -464,21 +1160,24 @@ pub fn RandomGenerator::gen_struct_def(self: Self) -> StructDef {
   // 注册结构体定义
   self.struct_defs.set(name, struct_def)
   
+  // 将结构体类型添加到类型环境
+  self.type_env.set(name, struct_def.type_of())
+  
   struct_def
 }
 
 pub fn RandomGenerator::gen_enum_def(self: Self) -> EnumDef {
   let name = self.gen_upper()
-  let variant_count = self.rand_int(4) + 1  // 1-4个变体
+  let variant_count = self.rand_int(6) + 1  // 1-6个变体，增加复杂度
   let variants = Array::new()
   
   for i = 0; i < variant_count; i = i + 1 {
     let variant_name = self.gen_upper()
-    let field_count = self.rand_int(3)  // 0-2个字段
+    let field_count = self.rand_int(5)  // 0-4个字段，增加复杂度
     let variant_fields = Array::new()
     
     for j = 0; j < field_count; j = j + 1 {
-      variant_fields.push(self.gen_type(false))
+      variant_fields.push(self.gen_type(true))  // 允许复杂变体字段类型
     }
     
     variants.push((variant_name, variant_fields))
@@ -488,6 +1187,9 @@ pub fn RandomGenerator::gen_enum_def(self: Self) -> EnumDef {
   
   // 注册枚举定义
   self.enum_defs.set(name, enum_def)
+  
+  // 将枚举类型添加到类型环境
+  self.type_env.set(name, enum_def.type_of())
   
   enum_def
 }
@@ -504,7 +1206,7 @@ pub fn RandomGenerator::gen_top_func_def(self: Self) -> TopFuncDef {
   // 生成参数
   for i = 0; i < param_count; i = i + 1 {
     let param_name = self.gen_ident()
-    let param_type = self.gen_type(false)
+    let param_type = self.gen_type(true)  // 允许复杂参数类型
     params.push((param_name, param_type))
     
     // 将参数添加到环境中
@@ -530,36 +1232,87 @@ pub fn RandomGenerator::gen_top_func_def(self: Self) -> TopFuncDef {
   func_def
 }
 
+/// 生成main函数（不带参数和泛型参数）
+pub fn RandomGenerator::gen_main_func(self: Self) -> TopFuncDef {
+  let name : Ident = Ident("main")
+  let params : Array[(Ident, Type)] = []  // main函数没有参数
+  let ret_ty = Unit  // main函数返回Unit
+  
+  // 创建新的环境作用域
+  let old_var_env = self.var_env
+  let old_mut_env = self.mutable_vars
+  self.var_env = old_var_env.sub_env()
+  self.mutable_vars = old_mut_env.sub_env()
+  
+  let old_return_type = self.current_return_type
+  self.current_return_type = Unit
+  
+  // 生成一个较大的函数体，包含更多语句
+  let body = self.gen_block_expr(Unit)
+  
+  // 恢复环境和返回类型
+  self.current_return_type = old_return_type
+  self.var_env = old_var_env
+  self.mutable_vars = old_mut_env
+  
+  { generic_param: None, name, params, ret_ty, body }
+}
+
 pub fn RandomGenerator::gen_top_decl(self: Self) -> TopDecl {
-  match self.rand_int(4) {
-    0 => TopDecl::TopLet(self.gen_top_let())
-    1 => TopDecl::StructDef(self.gen_struct_def())
-    2 => TopDecl::EnumDef(self.gen_enum_def())
-    _ => TopDecl::TopFuncDef(self.gen_top_func_def())
+  let choices = [
+    (0, 30), // 顶层let
+    (1, 25), // 结构体定义  
+    (2, 25), // 函数定义
+    (3, 20), // 枚举定义
+  ]
+  
+  match self.weighted_choice(choices) {
+    Some(0) => TopDecl::TopLet(self.gen_top_let())
+    Some(1) => TopDecl::StructDef(self.gen_struct_def())
+    Some(2) => TopDecl::TopFuncDef(self.gen_top_func_def())
+    Some(3) => TopDecl::EnumDef(self.gen_enum_def())
+    _ => TopDecl::TopLet(self.gen_top_let())
   }
 }
 
+/// 程序生成器，确保包含main函数并生成合理长度的程序
 pub fn RandomGenerator::gen_program(self: Self) -> Program {
   let top_decls = Array::new()
   
-  // 首先生成一些基础的类型定义
-  for i = 0; i < 2; i = i + 1 {
+  // 首先生成适量基础类型定义
+  let struct_count = self.rand_int(5) + 3  // 3-7个结构体
+  for i = 0; i < struct_count; i = i + 1 {
     top_decls.push(TopDecl::StructDef(self.gen_struct_def()))
+    self.current_lines = self.current_lines + 5
   }
   
-  for i = 0; i < 2; i = i + 1 {
+  let enum_count = self.rand_int(4) + 2  // 2-5个枚举
+  for i = 0; i < enum_count; i = i + 1 {
     top_decls.push(TopDecl::EnumDef(self.gen_enum_def()))
+    self.current_lines = self.current_lines + 6
   }
   
-  // 然后生成函数和顶层变量
-  let decl_count = self.rand_int(6) + 4  // 4-9个额外声明
+  // 生成适量函数和顶层变量
+  let decl_count = self.rand_int(40) + 40  // 40-79个声明
   for i = 0; i < decl_count; i = i + 1 {
-    match self.rand_int(3) {
-      0 => top_decls.push(TopDecl::TopLet(self.gen_top_let()))
-      1 => top_decls.push(TopDecl::TopFuncDef(self.gen_top_func_def()))
-      _ => top_decls.push(TopDecl::StructDef(self.gen_struct_def()))
+    let decl = self.gen_top_decl()
+    top_decls.push(decl)
+    
+    // 估算行数
+    match decl {
+      TopDecl::TopLet(_) => self.current_lines = self.current_lines + 1
+      TopDecl::TopFuncDef(func_def) => {
+        self.current_lines = self.current_lines + 3 + self.estimate_block_lines(func_def.body)
+      }
+      TopDecl::StructDef(_) => self.current_lines = self.current_lines + 5
+      TopDecl::EnumDef(_) => self.current_lines = self.current_lines + 6
     }
   }
+  
+  // 最后生成main函数（必须的）
+  let main_func = self.gen_main_func()
+  top_decls.push(TopDecl::TopFuncDef(main_func))
+  self.current_lines = self.current_lines + self.estimate_block_lines(main_func.body) + 2
   
   { top_decls, }
 }
