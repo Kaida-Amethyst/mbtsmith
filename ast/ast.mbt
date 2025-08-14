@@ -587,7 +587,7 @@ pub impl Show for BlockExpr with output(self, logger) {
   for stmt in self.stmts {
     logger.write_string(indent);
     logger.write_string(stmt.to_string());
-    logger.write_string(";\n");
+    logger.write_string("\n");
   }
   if self.last_expr is Some(expr) {
     logger.write_string(indent);
@@ -708,11 +708,11 @@ pub impl Show for Pattern with output(self, logger) {
 /// let val42 = IfLevelExpr::ApplyExpr(val42);
 /// let val42 = Expr::IfLevelExpr(val42);
 /// let let_stmt = Stmt::Let(Ident("x"), Some(Type::Int), val42);
-/// inspect(let_stmt, content="let x: Int = 42")
+/// inspect(let_stmt, content="let x: Int = 42;")
 ///
 /// // Mutable let statement
 /// let mut_stmt = Stmt::LetMut(Ident("counter"), None, val42);
-/// inspect(mut_stmt, content="let mut counter = 42")
+/// inspect(mut_stmt, content="let mut counter = 42;")
 ///
 /// // Tuple destructuring let
 /// let bindings = [Binding::Ident(Ident("a")), Binding::Ident(Ident("b"))];
@@ -721,12 +721,12 @@ pub impl Show for Pattern with output(self, logger) {
 /// let tuple_val = IfLevelExpr::ApplyExpr(tuple_val);
 /// let tuple_val = Expr::IfLevelExpr(tuple_val);
 /// let tuple_stmt = Stmt::LetTupe(bindings, None, tuple_val);
-/// inspect(tuple_stmt, content="let (a, b) = (42, 42)")
+/// inspect(tuple_stmt, content="let (a, b) = (42, 42);")
 ///
 /// // Assignment statement
 /// let left_val = LeftValue::Ident(Ident("x"));
 /// let assign_stmt = Stmt::Assign(left_val, val42);
-/// inspect(assign_stmt, content="x = 42")
+/// inspect(assign_stmt, content="x = 42;")
 ///
 /// // While loop
 /// let cond = ValueExpr::BoolExpr(true);
@@ -739,11 +739,11 @@ pub impl Show for Pattern with output(self, logger) {
 ///
 /// // Return statement
 /// let return_stmt = Stmt::Return(val42);
-/// inspect(return_stmt, content="return 42")
+/// inspect(return_stmt, content="return 42;")
 ///
 /// // Expression statement
 /// let expr_stmt = Stmt::ExprStmt(val42);
-/// inspect(expr_stmt, content="42")
+/// inspect(expr_stmt, content="42;")
 /// ```
 pub(all) enum Stmt {
   LetTupe(Array[Binding], Type?, Expr)
@@ -764,21 +764,21 @@ pub impl Show for Stmt with output(self, logger) {
         Some(ty) => ": \{ty}";
         None => "";
       }
-      logger.write_string("let (\{bindings_str})\{ty_str} = \{expr}");
+      logger.write_string("let (\{bindings_str})\{ty_str} = \{expr};");
     }
     LetMut(ident, ty_opt, expr) => {
       let ty_str = match ty_opt {
         Some(ty) => ": \{ty}";
         None => "";
       }
-      logger.write_string("let mut \{ident}\{ty_str} = \{expr}");
+      logger.write_string("let mut \{ident}\{ty_str} = \{expr};");
     }
     Let(ident, ty_opt, expr) => {
       let ty_str = match ty_opt {
         Some(ty) => ": \{ty}";
         None => "";
       }
-      logger.write_string("let \{ident}\{ty_str} = \{expr}");
+      logger.write_string("let \{ident}\{ty_str} = \{expr};");
     }
     LocalFuncDef(params, ret_ty_opt, body) => {
       let params_str = params.map(p => "\{p.0}: \{p.1}").join(", ");
@@ -790,17 +790,17 @@ pub impl Show for Stmt with output(self, logger) {
       logger.write_string(body.to_string());
     }
     Assign(left_value, expr) => {
-      logger.write_string("\{left_value} = \{expr}");
+      logger.write_string("\{left_value} = \{expr};");
     }
     While(cond, body) => {
       logger.write_string("while \{cond} ");
       logger.write_string(body.to_string());
     }
     Return(expr) => {
-      logger.write_string("return \{expr}");
+      logger.write_string("return \{expr};");
     }
     ExprStmt(expr) => {
-      logger.write_string("\{expr}");
+      logger.write_string("\{expr};");
     }
   }
 }
@@ -856,6 +856,14 @@ pub(all) struct TopLet {
   name: Ident
   ty: Type?
   value: Expr
+}
+
+pub impl Show for TopLet with output(self, logger) {
+  let ty_str = match self.ty {
+    Some(ty) => ": \{ty}";
+    None => "";
+  }
+  logger.write_string("let \{self.name}\{ty_str} = \{self.value};");
 }
 
 pub(all) struct TopFuncDef {
