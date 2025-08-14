@@ -248,36 +248,36 @@ fn RandAstGenerator::gen_enum_type(self: Self) -> Type {
 }
 
 fn RandAstGenerator::gen_generic_sub_type(self: Self) -> Type {
-  fn gen_generic_sub_type_from_struct_defs() -> Upper? {
-    let generic_structs : Array[Upper] = Array::new();
-    for struct_def in self.structs.values() {
-      if struct_def.generic_param is Some(u) {
-        generic_structs.push(u);
-      }
+  // Collect all generic struct names
+  let generic_structs : Array[Upper] = Array::new();
+  for struct_def in self.structs.values() {
+    if struct_def.generic_param is Some(_) {
+      generic_structs.push(struct_def.name);
     }
-    self.choice(generic_structs)
   }
-  fn gen_generic_sub_type_from_enum_defs() -> Upper? {
-    let generic_enums : Array[Upper] = Array::new();
-    for enum_def in self.enums.values() {
-      if enum_def.generic_param is Some(u) {
-        generic_enums.push(u);
-      }
+  
+  // Collect all generic enum names  
+  let generic_enums : Array[Upper] = Array::new();
+  for enum_def in self.enums.values() {
+    if enum_def.generic_param is Some(_) {
+      generic_enums.push(enum_def.name);
     }
-    self.choice(generic_enums)
   }
-  let master = match self.pos_int(2) {
-    0 => gen_generic_sub_type_from_struct_defs();
-    _ => gen_generic_sub_type_from_enum_defs();
+  
+  // Combine all generic type names
+  let all_generic_types : Array[Upper] = Array::new();
+  all_generic_types.append(generic_structs);
+  all_generic_types.append(generic_enums);
+  
+  // If no generic types found, generate a regular type
+  if all_generic_types.is_empty() {
+    return self.gen_type();
   }
-
-  match master {
-    Some(master) => {
-      let sub_type = self.gen_type();
-      GenericSub(master, sub_type)
-    }
-    None => return self.gen_type();
-  }
+  
+  // Pick a random generic type and substitute with a concrete type
+  let generic_name = self.choice(all_generic_types).unwrap();
+  let sub_type = self.gen_type();
+  GenericSub(generic_name, sub_type)
 }
 
 fn RandAstGenerator::gen_func_type(self: Self) -> Type {
@@ -357,7 +357,7 @@ fn RandAstGenerator::gen_value_expr(self: Self, ty: Type, deepth: Int) -> ValueE
             for i in 0..<self.pos_int(self.direct_array_max_len) {
               exprs.push(self.gen_expr(elem_ty, deepth + 1));
             }
-            ValueExpr::ArrayExpr(exprs);
+            ValueExpr::ArrayExpr(exprs)
           }
         }
       }
@@ -369,7 +369,7 @@ fn RandAstGenerator::gen_value_expr(self: Self, ty: Type, deepth: Int) -> ValueE
         for elem_ty in elem_tys {
           exprs.push(self.gen_expr(elem_ty, deepth + 1));
         }
-        ValueExpr::TupleExpr(exprs);
+        ValueExpr::TupleExpr(exprs)
       }
       get_value_expr_helper(Tuple(elem_tys), default_expr)
     }
@@ -381,7 +381,7 @@ fn RandAstGenerator::gen_value_expr(self: Self, ty: Type, deepth: Int) -> ValueE
           let expr = self.gen_expr(field_ty, deepth + 1);
           field_exprs.push((field_name, expr));
         }
-        ValueExpr::StructConstruct(name, field_exprs);
+        ValueExpr::StructConstruct(name, field_exprs)
       }
       get_value_expr_helper(Struct(name, fields), default_expr)
     }
@@ -395,9 +395,9 @@ fn RandAstGenerator::gen_value_expr(self: Self, ty: Type, deepth: Int) -> ValueE
               exprs.push(self.gen_expr(ty, deepth + 1));
             }
             let name = if self.pos_int(2) > 0 { Some(name) } else { None };
-            ValueExpr::EnumConstruct(name, variant_name, exprs);
+            ValueExpr::EnumConstruct(name, variant_name, exprs)
           }
-          None => ValueExpr::UnitExpr;
+          None => ValueExpr::UnitExpr
         }
       }
       get_value_expr_helper(Enum(name, variants), default_expr)
@@ -405,7 +405,7 @@ fn RandAstGenerator::gen_value_expr(self: Self, ty: Type, deepth: Int) -> ValueE
     //Func()
     // GenericDef(Upper)
     // GenericSub(Upper, Type)
-    _ => ValueExpr::UnitExpr;
+    _ => ValueExpr::UnitExpr
   }
 }
 
@@ -419,17 +419,17 @@ fn RandAstGenerator::gen_apply_expr(self: Self, ty: Type, deepth: Int) -> ApplyE
   match n {
     0..<2 => {
       let value_expr = self.gen_value_expr(ty, deepth);
-      ApplyExpr::ValueExpr(value_expr);
+      ApplyExpr::ValueExpr(value_expr)
     }
     2..<3 => {
       let aexpr = self.gen_apply_expr(ty, deepth + 1);
       let index_expr = self.gen_expr(Int, deepth + 1);
-      ApplyExpr::ArrAcc(aexpr, index_expr);
+      ApplyExpr::ArrAcc(aexpr, index_expr)
     }
     3..<4 => {
       let aexpr = self.gen_apply_expr(ty, deepth + 1);
       let ident = self.new_ident();
-      ApplyExpr::DotAcc(aexpr, ident);
+      ApplyExpr::DotAcc(aexpr, ident)
     }
     _ => {
       let aexpr = self.gen_apply_expr(ty, deepth + 1);
@@ -437,7 +437,7 @@ fn RandAstGenerator::gen_apply_expr(self: Self, ty: Type, deepth: Int) -> ApplyE
       for i in 0..<self.pos_int(3) {
         args.push(self.gen_expr(ty, deepth + 1));
       }
-      ApplyExpr::Call(aexpr, args);
+      ApplyExpr::Call(aexpr, args)
     }
   }
 }
@@ -510,15 +510,15 @@ fn RandAstGenerator::gen_if_level_expr(self: Self, ty: Type, deepth: Int) -> IfL
   match n {
     2..<3 => {
       let if_expr = self.gen_if_expr(ty);
-      IfLevelExpr::IfExpr(if_expr);
+      IfLevelExpr::IfExpr(if_expr)
     }
     3..<4 => {
       let match_expr = self.gen_match_expr(ty);
-      IfLevelExpr::MatchExpr(match_expr);
+      IfLevelExpr::MatchExpr(match_expr)
     }
     _ => {
       let aexpr = self.gen_apply_expr(ty, deepth);
-      IfLevelExpr::ApplyExpr(aexpr);
+      IfLevelExpr::ApplyExpr(aexpr)
     }
   }
 }
