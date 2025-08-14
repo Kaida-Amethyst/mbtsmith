@@ -292,6 +292,21 @@ fn Expr::from_value_expr(value_expr: ValueExpr) -> Expr {
   IfLevelExpr(ApplyExpr(ValueExpr(value_expr)))
 }
 
+fn Expr::from_int(value: Int) -> Expr {
+  let val_expr = ValueExpr::IntExpr(value);
+  IfLevelExpr(ApplyExpr(ValueExpr(val_expr)))
+}
+
+fn Expr::from_bool(value: Bool) -> Expr {
+  let val_expr = ValueExpr::BoolExpr(value);
+  IfLevelExpr(ApplyExpr(ValueExpr(val_expr)))
+}
+
+fn Expr::from_double(value: Double) -> Expr {
+  let val_expr = ValueExpr::FloatExpr(value);
+  IfLevelExpr(ApplyExpr(ValueExpr(val_expr)))
+}
+
 pub impl Show for Expr with output(self, logger) {
   let s = match self {
     AndExpr(left, right) => "\{left} && \{right}";
@@ -901,7 +916,7 @@ pub impl Show for StructDef with output(self, logger) {
   for field in self.fields {
     let (name, ty) = field;
     logger.write_string(indent);
-    logger.write_string("\{name}: \{ty}\n");
+    logger.write_string("\{name}: \{ty};\n");
   }
   logger.write_string("}");
 }
@@ -983,12 +998,12 @@ pub impl Show for EnumDef with output(self, logger) {
     logger.write_string(indent);
     logger.write_string("\{name}");
     if fields.is_empty() {
-      logger.write_string("\n");
+      logger.write_string(";\n");
       continue;
     }
     let fields_str = fields.map(f => f.to_string()).join(", ");
     logger.write_string("(\{fields_str})");
-    logger.write_string("\n");
+    logger.write_string(";\n");
   }
   logger.write_string("}");
 }

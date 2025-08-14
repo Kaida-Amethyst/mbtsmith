@@ -55,9 +55,9 @@ pub(all) struct RandAstGenerator {
   let_tuple_max_bindings: Int
   ty_env: Env[Upper, Type]
   id_env: Env[Ident, Type]
-  generic: Upper?
+  mut generic: Upper?
 
-  mut curr_block : BlockExpr
+  mut curr_block : BlockExpr?
   ret_ty: Type
 
   // structs
@@ -77,7 +77,7 @@ pub fn RandAstGenerator::new(
   stmt_max_num~: Int = 30,
   let_tuple_max_bindings~: Int = 4,
   generic~: Upper? = None,
-  block: BlockExpr,
+  block~: BlockExpr? =None,
   ret_ty~: Type = Unit
 ) -> RandAstGenerator {
   RandAstGenerator::{
@@ -155,7 +155,7 @@ pub fn RandAstGenerator::new_upper(self: Self) -> Upper {
 pub fn RandAstGenerator::new_ident(self: Self) -> Ident {
   fn helper() -> Ident {
     let str_builder = StringBuilder::new();
-    let first_char = self.choice(NON_UPPER_CHARS.to_array()).unwrap();
+    let first_char = self.choice(LOWER_CHARS.to_array()).unwrap();
     str_builder.write_char(first_char);
     for i in 0..<self.pos_int(self.ident_max_len) {
       let c = self.choice(IDENT_CHARS.to_array()).unwrap();
@@ -452,12 +452,12 @@ fn RandAstGenerator::gen_expr(self: Self, ty: Type, deepth: Int) -> Expr {
     2..<4 => {
       let left = self.gen_expr(ty, deepth + 1);
       let right = self.gen_expr(ty, deepth + 1);
-      Expr::AndExpr(left, right);
+      Expr::AndExpr(left, right)
     }
     4..<6 => {
       let left = self.gen_expr(ty, deepth + 1);
       let right = self.gen_expr(ty, deepth + 1);
-      Expr::OrExpr(left, right);
+      Expr::OrExpr(left, right)
     }
     6..<8 => {
       let left = self.gen_expr(ty, deepth + 1);
@@ -470,34 +470,34 @@ fn RandAstGenerator::gen_expr(self: Self, ty: Type, deepth: Int) -> Expr {
         4 => Gt;
         _ => Ge;
       }
-      Expr::CmpExpr(cmp_op, left, right);
+      Expr::CmpExpr(cmp_op, left, right)
     }
     8..<10 => {
       let left = self.gen_expr(ty, deepth + 1);
       let right = self.gen_expr(ty, deepth + 1);
-      Expr::AddExpr(left, right);
+      Expr::AddExpr(left, right)
     }
     10..<12 => {
       let left = self.gen_expr(ty, deepth + 1);
       let right = self.gen_expr(ty, deepth + 1);
-      Expr::SubExpr(left, right);
+      Expr::SubExpr(left, right)
     }
     12..<14 => {
       let left = self.gen_expr(ty, deepth + 1);
       let right = self.gen_expr(ty, deepth + 1);
-      Expr::MulExpr(left, right);
+      Expr::MulExpr(left, right)
     }
     14..<16 => {
       let left = self.gen_expr(ty, deepth + 1);
       let right = self.gen_expr(ty, deepth + 1);
-      Expr::DivExpr(left, right);
+      Expr::DivExpr(left, right)
     }
     16..<18 => {
       let left = self.gen_expr(ty, deepth + 1);
       let right = self.gen_expr(ty, deepth + 1);
-      Expr::ModExpr(left, right);
+      Expr::ModExpr(left, right)
     }
-    _ => IfLevelExpr(self.gen_if_level_expr(ty, deepth));
+    _ => IfLevelExpr(self.gen_if_level_expr(ty, deepth))
   }
 }
 
@@ -565,8 +565,85 @@ fn RandAstGenerator::gen_if_expr(self: Self, ty: Type) -> IfExpr {
   }
 }
 
+fn RandAstGenerator::gen_pattern(self: Self, ty: Type) -> Pattern {
+  match ty {
+    Int => {
+      match self.pos_int(3) {
+        0 => Pattern::Number(self.int(100));
+        1 => Pattern::Ident(self.new_ident());
+        _ => Pattern::WildCard;
+      }
+    }
+    Bool => {
+      match self.pos_int(3) {
+        0 => Pattern::Bool(self.gen_bool());
+        1 => Pattern::Ident(self.new_ident());
+        _ => Pattern::WildCard;
+      }
+    }
+    Tuple(elem_tys) => {
+      match self.pos_int(3) {
+        0 => {
+          let patterns = Array::new();
+          for elem_ty in elem_tys {
+            patterns.push(self.gen_pattern(elem_ty));
+          }
+          Pattern::Tuple(patterns)
+        }
+        1 => Pattern::Ident(self.new_ident());
+        _ => Pattern::WildCard;
+      }
+    }
+    Enum(name, variants) => {
+      match self.pos_int(4) {
+        0 => {
+          let variant = self.choice(variants);
+          match variant {
+            Some((variant_name, variant_tys)) => {
+              let patterns = Array::new();
+              for variant_ty in variant_tys {
+                patterns.push(self.gen_pattern(variant_ty));
+              }
+              let prefix = if self.pos_int(2) > 0 { Some(name) } else { None };
+              Pattern::EnumPattern(prefix, variant_name, patterns)
+            }
+            None => Pattern::WildCard;
+          }
+        }
+        1 => Pattern::Ident(self.new_ident());
+        _ => Pattern::WildCard;
+      }
+    }
+    _ => {
+      match self.pos_int(2) {
+        0 => Pattern::Ident(self.new_ident());
+        _ => Pattern::WildCard;
+      }
+    }
+  }
+}
+
 fn RandAstGenerator::gen_match_expr(self: Self, ty: Type) -> MatchExpr {
-  ...
+  let expr = self.gen_expr(self.gen_type(), 0);
+  let arms = Array::new();
+  
+  let arm_count = self.pos_int(5) + 1; // at least 1 arm
+  for i in 0..<arm_count {
+    let pattern = if i == arm_count - 1 {
+      // Last arm should be a wildcard as catch-all
+      Pattern::WildCard
+    } else {
+      self.gen_pattern(ty)
+    };
+    let arm_expr = self.gen_expr(ty, 0);
+    arms.push((pattern, arm_expr));
+  }
+  
+  MatchExpr::{
+    nested_level: 0,
+    expr,
+    arms,
+  }
 }
 
 //pub(all) enum Stmt {
@@ -599,7 +676,7 @@ fn RandAstGenerator::gen_stmt(self: Self) -> Stmt {
       } else {
         None
       }
-      Stmt::LetTuple(bindings, ty, expr);
+      Stmt::LetTuple(bindings, ty, expr)
     }
     2..<4 => {
       let ident = self.new_ident();
@@ -610,7 +687,7 @@ fn RandAstGenerator::gen_stmt(self: Self) -> Stmt {
       } else {
         None
       }
-      Stmt::LetMut(ident, ty, expr);
+      Stmt::LetMut(ident, ty, expr)
     }
     4..<6 => {
       let ident = self.new_ident();
@@ -621,7 +698,7 @@ fn RandAstGenerator::gen_stmt(self: Self) -> Stmt {
       } else {
         None
       }
-      Stmt::Let(ident, ty, expr);
+      Stmt::Let(ident, ty, expr)
     }
     //7..<8 => {
     //  let left_value = self.gen_left_value();
@@ -631,35 +708,180 @@ fn RandAstGenerator::gen_stmt(self: Self) -> Stmt {
     _ => {
       let cond_expr = self.gen_expr(Bool, 0);
       let block_expr = self.gen_block_expr(Unit);
-      Stmt::While(cond_expr, block_expr);
+      Stmt::While(cond_expr, block_expr)
     }
   }
 }
 
 fn RandAstGenerator::gen_local_func_def(self: Self) -> Stmt {
-  ...
+  let params = Array::new();
+  let param_count = self.pos_int(5); // 0-4 parameters
+  
+  for i in 0..<param_count {
+    let param_name = self.new_ident();
+    let param_ty = if self.pos_int(2) > 0 {
+      Some(self.gen_type())
+    } else {
+      None
+    };
+    params.push((param_name, param_ty));
+  }
+  
+  let ret_ty = if self.pos_int(2) > 0 {
+    Some(self.gen_type())
+  } else {
+    None
+  };
+  
+  let body = self.gen_block_expr(match ret_ty {
+    Some(ty) => ty;
+    None => Unit;
+  });
+  
+  Stmt::LocalFuncDef(params, ret_ty, body)
 }
 
-fn RandAstGenerator::gen_top_let(self: Self) -> TopLet {
-  ...
+pub fn RandAstGenerator::gen_top_let(self: Self) -> TopLet {
+  let name = self.new_ident();
+  let (ty, value) = match self.pos_int(9) {
+    0..<2 => (Int, Expr::from_int(self.int(300000)));
+    2..<4 => (Bool, Expr::from_bool(self.gen_bool()));
+    4..<8 => (Double, Expr::from_double(self.gen_double()));
+    _ => (Unit, Expr::from_value_expr(ValueExpr::UnitExpr));
+  }
+  let ty = if self.pos_int(2) > 0 {
+    Some(ty)
+  } else {
+    None
+  }
+  TopLet::{
+    name,
+    ty,
+    value,
+  }
 }
 
-fn RandAstGenerator::gen_top_func_def(self: Self) -> TopFuncDef {
-  ...
+pub fn RandAstGenerator::gen_top_func_def(self: Self) -> TopFuncDef {
+  let generic_param = if self.pos_int(3) == 0 {
+    Some(self.new_upper())
+  } else {
+    None
+  };
+  self.generic = generic_param; // Set the current generic parameter for later use
+  
+  let name = self.new_ident();
+  
+  let params = Array::new();
+  let param_count = self.pos_int(6); // 0-5 parameters
+  
+  for i in 0..<param_count {
+    let param_name = self.new_ident();
+    let param_ty = self.gen_type();
+    params.push((param_name, param_ty));
+  }
+  
+  let ret_ty = self.gen_type();
+  let body = self.gen_block_expr(ret_ty);
+  self.generic = None; // Clear the generic parameter after use
+  
+  TopFuncDef::{
+    generic_param,
+    name,
+    params,
+    ret_ty,
+    body,
+  }
 }
 
-fn RandAstGenerator::gen_struct_def(self: Self) -> StructDef {
-  ...
+pub fn RandAstGenerator::gen_struct_def(self: Self) -> StructDef {
+  let generic_param = if self.pos_int(3) == 0 {
+    Some(self.new_upper())
+  } else {
+    None
+  };
+  self.generic = generic_param; // Set the current generic parameter for later use
+  
+  let name = self.new_upper();
+  
+  let fields = Array::new();
+  let field_count = self.pos_int(6); // 0-5 fields
+  
+  for i in 0..<field_count {
+    let field_name = self.new_ident();
+    let field_ty = self.gen_type();
+    fields.push((field_name, field_ty));
+  }
+  
+  let struct_def = StructDef::{
+    generic_param,
+    name,
+    fields,
+  };
+  
+  // Register the struct for later use
+  self.structs.set(name, struct_def);
+  self.generic = None; // Clear the generic parameter after use
+  
+  struct_def
 }
 
-fn RandAstGenerator::gen_enum_def(self: Self) -> EnumDef {
-  ...
+pub fn RandAstGenerator::gen_enum_def(self: Self) -> EnumDef {
+  let generic_param = if self.pos_int(3) == 0 {
+    Some(self.new_upper())
+  } else {
+    None
+  };
+  self.generic = generic_param; // Set the current generic parameter for later use
+  
+  let name = self.new_upper();
+  
+  let variants = Array::new();
+  let variant_count = self.pos_int(5) + 1; // at least 1 variant
+  
+  for i in 0..<variant_count {
+    let variant_name = self.new_upper();
+    let variant_fields = Array::new();
+    let field_count = self.pos_int(4); // 0-3 fields
+    
+    for j in 0..<field_count {
+      variant_fields.push(self.gen_type());
+    }
+    
+    variants.push((variant_name, variant_fields));
+  }
+  
+  let enum_def = EnumDef::{
+    generic_param,
+    name,
+    variants,
+  };
+  
+  // Register the enum for later use
+  self.enums.set(name, enum_def);
+  self.generic = None; // Clear the generic parameter after use
+  
+  enum_def
 }
 
-fn RandAstGenerator::gen_top_decl(self: Self) -> TopDecl {
-  ...
+pub fn RandAstGenerator::gen_top_decl(self: Self) -> TopDecl {
+  match self.pos_int(4) {
+    0 => TopDecl::TopLet(self.gen_top_let());
+    1 => TopDecl::TopFuncDef(self.gen_top_func_def());
+    2 => TopDecl::StructDef(self.gen_struct_def());
+    _ => TopDecl::EnumDef(self.gen_enum_def());
+  }
 }
 
-fn RandAstGenerator::gen_program(self: Self) -> Program {
-  ...
+pub fn RandAstGenerator::gen_program(self: Self) -> Program {
+  let top_decls = Array::new();
+  let decl_count = self.pos_int(10) + 5; // at least 5 declarations
+  
+  for i in 0..<decl_count {
+    let decl = self.gen_top_decl();
+    top_decls.push(decl);
+  }
+  
+  Program::{
+    top_decls,
+  }
 }
