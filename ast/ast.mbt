@@ -701,7 +701,7 @@ pub impl Show for Stmt with output(self, logger) {
       logger.write_string("return \{expr};");
     }
     ExprStmt(expr) => {
-      logger.write_string("\{expr};");
+      logger.write_string("let _ = \{expr};");
     }
   }
 }
