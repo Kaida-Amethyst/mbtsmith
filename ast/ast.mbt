@@ -457,6 +457,24 @@ pub impl Show for IfExpr with output(self, logger) {
   }
 }
 
+///| BlockExpr is wrapped in `{}` and contains a sequence of statements.
+///
+/// ```mbt
+/// let i42 = ValueExpr::IntExpr(42);
+/// let i42 = ApplyExpr::ValueExpr(i42);
+/// let i42 = IfLevelExpr::ApplyExpr(i42);
+/// let i42 = Expr::IfLevelExpr(i42);
+///
+/// let stmt = Stmt::Let(Ident("x"), None, i42);
+/// let block = BlockExpr::{ nested_level: 0, stmts: [stmt], last_expr: None };
+///
+/// let expect = 
+///   #|{
+///   #|  let x = 42;
+///   #|}
+///
+/// inspect(block, content=expect)
+/// ```
 pub struct BlockExpr {
   nested_level: Int // for print indentation
   stmts: Array[Stmt]
