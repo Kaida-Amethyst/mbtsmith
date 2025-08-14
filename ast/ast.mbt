@@ -44,7 +44,7 @@ pub(all) enum Type {
   Enum(Upper, Array[(Upper, Array[Type])]) // e.g. Color::Red(Int, Int, Int)
   GenericDef(Upper)  // T
   GenericSub(Upper, Type) // Complex[Int]
-}
+} derive(Eq)
 
 pub impl Show for Type with output(self, logger) {
   let s = match self {
@@ -84,14 +84,14 @@ pub impl Show for Type with output(self, logger) {
 pub(all) enum ValueExpr {
   ArrayMake(Expr, Expr)
   StructConstruct(Upper, Array[(Ident, Expr)]) // Point::{ x: 1, y: 2 }
-  EnumConstruct(Upper, Array[Expr]) // Point(1, 2)
+  EnumConstruct(Upper?, Upper, Array[Expr]) // Point(1, 2)
   UnitExpr // ()
   GroupExpr(Expr) // (x)
   TupleExpr(Array[Expr]) // (x, y)
   ArrayExpr(Array[Expr]) // [x, y, z]
   BoolExpr(Bool) // true | false
   IdentExpr(Ident) // x
-  BlockExpr(Array[Stmt], Expr?) // { blah; blah;  blah}
+  BlockExpr(BlockExpr) // { blah; blah;  blah}
   NegExpr(Expr) // -x
   FloatExpr(Double) // 1.0 | 1.
   IntExpr(Int) // 1
@@ -105,9 +105,13 @@ pub impl Show for ValueExpr with output(self, logger) {
       let fields_str = fields.map(f => "\{f.0}: \{f.1}").join(", ");
       "\{name}::{\{fields_str}}"
     }
-    EnumConstruct(name, fields) => {
+    EnumConstruct(enum_name, tag, fields) => {
       let fields_str = fields.map(f => f.to_string()).join(", ");
-      "\{name}(\{fields_str})"
+      let prefix = match enum_name {
+        Some(prefix) => "\{prefix}::";
+        None => "";
+      }
+      "\{prefix}\{tag}(\{fields_str})"
     }
     UnitExpr => "()";
     GroupExpr(expr) => "(\{expr})";
@@ -121,13 +125,7 @@ pub impl Show for ValueExpr with output(self, logger) {
     }
     BoolExpr(value) => if value { "true" } else { "false" };
     IdentExpr(ident) => ident.to_string();
-    BlockExpr(stmts, expr_opt) => {
-      let stmts_str = stmts.map(s => s.to_string()).join("; ");
-      match expr_opt {
-        Some(expr) => "{ \{stmts_str}; \{expr} }";
-        None => "{ \{stmts_str} }";
-      }
-    }
+    BlockExpr(b) => b.to_string();
     NegExpr(expr) => "-\{expr}";
     FloatExpr(value) => { 
       let s = value.to_string();
@@ -288,6 +286,10 @@ pub(all) enum Expr {
   DivExpr(Expr, Expr) // x / y
   ModExpr(Expr, Expr) // x % y
   IfLevelExpr(IfLevelExpr)
+}
+
+fn Expr::from_value_expr(value_expr: ValueExpr) -> Expr {
+  IfLevelExpr(ApplyExpr(ValueExpr(value_expr)))
 }
 
 pub impl Show for Expr with output(self, logger) {
@@ -859,6 +861,10 @@ pub(all) struct StructDef {
   fields: Array[(Ident, Type)]
 }
 
+pub fn StructDef::type_of(self: Self) -> Type {
+  Type::Struct(self.name, self.fields)
+}
+
 pub impl Show for StructDef with output(self, logger) {
   let generic_str = match self.generic_param {
     Some(param) => "[\{param}]";
@@ -933,6 +939,10 @@ pub(all) struct EnumDef {
   generic_param: Upper?
   name: Upper
   variants: Array[(Upper, Array[Type])] // e.g. Point(x: Int, y: Int)
+}
+
+pub fn EnumDef::type_of(self: Self) -> Type {
+  Type::Enum(self.name, self.variants)
 }
 
 pub impl Show for EnumDef with output(self, logger) {
