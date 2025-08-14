@@ -318,8 +318,8 @@ pub impl Show for Expr with output(self, logger) {
 /// let cond = ApplyExpr::ValueExpr(cond);
 /// let cond = IfLevelExpr::ApplyExpr(cond);
 /// let cond = Expr::IfLevelExpr(cond);
-/// let then_block = BlockExpr::{ nested_level: 0, stmts: [], last_expr: None };
-/// let else_block = BlockExpr::{ nested_level: 0, stmts: [], last_expr: None };
+/// let then_block = BlockExpr::new()
+/// let else_block = BlockExpr::new()
 /// let if_expr = IfExpr::{ cond, then_: then_block, else_: Right(else_block) };
 /// inspect(IfLevelExpr::IfExpr(if_expr), content="if true {\n} else {\n}")
 ///
@@ -358,8 +358,8 @@ pub impl Show for IfLevelExpr with output(self, logger) {
 /// let y_val = IfLevelExpr::ApplyExpr(y_val);
 /// let y_val = Expr::IfLevelExpr(y_val);
 ///
-/// let then_block = BlockExpr::{ nested_level: 0, stmts: [], last_expr: Some(x_val) };
-/// let else_block = BlockExpr::{ nested_level: 0, stmts: [], last_expr: Some(y_val) };
+/// let then_block = BlockExpr::new(last_expr=Some(x_val));
+/// let else_block = BlockExpr::new(last_expr=Some(y_val));
 /// let if_expr = IfExpr::{ cond, then_: then_block, else_: Right(else_block) };
 ///
 /// let expect =
@@ -404,7 +404,8 @@ pub impl Show for IfExpr with output(self, logger) {
 /// let i42 = Expr::IfLevelExpr(i42);
 ///
 /// let stmt = Stmt::Let(Ident("x"), None, i42);
-/// let block1 = BlockExpr::{ nested_level: 0, stmts: [stmt], last_expr: None };
+/// let block1 = BlockExpr::new()
+/// block1.push(stmt);
 ///
 /// let expect1 = 
 ///   #|{
@@ -425,7 +426,9 @@ pub impl Show for IfExpr with output(self, logger) {
 /// let final_expr = IfLevelExpr::ApplyExpr(final_expr);
 /// let final_expr = Expr::IfLevelExpr(final_expr);
 ///
-/// let block2 = BlockExpr::{ nested_level: 0, stmts: [stmt2], last_expr: Some(final_expr) };
+/// let block2 = BlockExpr::new(last_expr = Some(final_expr));
+/// block2.push(stmt2);
+///
 ///
 /// let expect2 = 
 ///   #|{
@@ -436,13 +439,31 @@ pub impl Show for IfExpr with output(self, logger) {
 /// inspect(block2, content=expect2)
 ///
 /// // Empty block
-/// let empty_block = BlockExpr::{ nested_level: 0, stmts: [], last_expr: None };
+/// let empty_block = BlockExpr::new()
 /// inspect(empty_block, content="{\n}")
 /// ```
 pub struct BlockExpr {
   nested_level: Int // for print indentation
   stmts: Array[Stmt]
-  last_expr: Expr?
+  mut last_expr: Expr?
+  parent: BlockExpr?
+}
+
+pub fn BlockExpr::new(nested_level~:Int = 0, parent~: BlockExpr?=None, last_expr~: Expr? = None) -> BlockExpr {
+  BlockExpr::{
+    nested_level,
+    stmts: [],
+    last_expr,
+    parent
+  }
+}
+
+pub fn BlockExpr::set_last_expr(self: Self, expr: Expr) -> Unit {
+  self.last_expr = Some(expr);
+}
+
+pub fn BlockExpr::push(self: Self, stmt: Stmt) -> Unit {
+  self.stmts.push(stmt);
 }
 
 pub impl Show for BlockExpr with output(self, logger) {
@@ -598,7 +619,7 @@ pub impl Show for Pattern with output(self, logger) {
 /// let cond = ApplyExpr::ValueExpr(cond);
 /// let cond = IfLevelExpr::ApplyExpr(cond);
 /// let cond = Expr::IfLevelExpr(cond);
-/// let body = BlockExpr::{ nested_level: 0, stmts: [], last_expr: None };
+/// let body = BlockExpr::new()
 /// let while_stmt = Stmt::While(cond, body);
 /// inspect(while_stmt, content="while true {\n}")
 ///
@@ -764,7 +785,7 @@ pub impl Show for TopLet with output(self, logger) {
 /// let val42 = ApplyExpr::ValueExpr(val42);
 /// let val42 = IfLevelExpr::ApplyExpr(val42);
 /// let val42 = Expr::IfLevelExpr(val42);
-/// let body = BlockExpr::{ nested_level: 0, stmts: [], last_expr: Some(val42) };
+/// let body = BlockExpr::new(last_expr=Some(val42));
 ///
 /// // Simple function without generic parameters
 /// let params1 : Array[(Ident, Type)] = [("x", Int), ("y", Int)];
