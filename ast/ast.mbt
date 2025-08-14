@@ -874,14 +874,67 @@ pub(all) struct TopFuncDef {
   body: BlockExpr
 }
 
+pub impl Show for TopFuncDef with output(self, logger) {
+  let generic_str = match self.generic_param {
+    Some(param) => "[\{param}]";
+    None => "";
+  }
+  let params_str = self.params.map(p => "\{p.0}: \{p.1}").join(", ");
+  logger.write_string("fn\{generic_str} \{self.name}(\{params_str}) -> \{self.ret_ty} ");
+  logger.write_string(self.body.to_string());
+}
+
 pub(all) struct StructDef {
   generic_param: Upper?
   name: Upper
   fields: Array[(Ident, Type)]
 }
 
+pub impl Show for StructDef with output(self, logger) {
+  let generic_str = match self.generic_param {
+    Some(param) => "[\{param}]";
+    None => "";
+  }
+  logger.write_string("struct \{self.name}\{generic_str} {");
+  if self.fields.is_empty() {
+    logger.write_string("}\n");
+    return;
+  }
+  let indent = "  "
+  for field in self.fields {
+    let (name, ty) = field;
+    logger.write_string(indent);
+    logger.write_string("\{name}: \{ty};\n");
+  }
+}
+
 pub(all) struct EnumDef {
   generic_param: Upper?
   name: Upper
   variants: Array[(Upper, Array[Type])] // e.g. Point(x: Int, y: Int)
+}
+
+pub impl Show for EnumDef with output(self, logger) {
+  let generic_str = match self.generic_param {
+    Some(param) => "[\{param}]";
+    None => "";
+  }
+  logger.write_string("enum \{self.name}\{generic_str} {");
+  if self.variants.is_empty() {
+    logger.write_string("}\n");
+    return;
+  }
+  let indent = "  ";
+  for variant in self.variants {
+    let (name, fields) = variant;
+    logger.write_string(indent);
+    logger.write_string("\{name}");
+    if fields.is_empty() {
+      logger.write_string(";\n");
+      continue;
+    }
+    let fields_str = fields.map(f => f.to_string()).join(", ");
+    logger.write_string("(\{fields_str})");
+    logger.write_string(";\n");
+  }
 }
