@@ -106,12 +106,17 @@ pub impl Show for ValueExpr with output(self, logger) {
       "\{name}::{\{fields_str}}"
     }
     EnumConstruct(enum_name, tag, fields) => {
-      let fields_str = fields.map(f => f.to_string()).join(", ");
+      let fields_str = if fields.is_empty() {
+        ""
+      } else {
+        let s = fields.map(f => f.to_string()).join(", ");
+        "(\{s})"
+      }
       let prefix = match enum_name {
         Some(prefix) => "\{prefix}::";
         None => "";
       }
-      "\{prefix}\{tag}(\{fields_str})"
+      "\{prefix}\{tag}\{fields_str}"
     }
     UnitExpr => "()";
     GroupExpr(expr) => "(\{expr})";

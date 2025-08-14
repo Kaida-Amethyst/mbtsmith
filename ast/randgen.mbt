@@ -1073,6 +1073,11 @@ fn RandomGenerator::gen_local_func_def_stmt(self: Self) -> Stmt {
   let ret_ty = self.gen_basic_type()  // 使用基础类型确保安全
   let old_return_type = self.current_return_type
   self.current_return_type = ret_ty
+
+  // 生成函数类型和函数名
+  let func_name = self.gen_ident()
+  let fucn_type = Type::Func(params.map(fn(p) { p.1.unwrap() }), ret_ty)
+  self.var_env.set(func_name, fucn_type)
   
   let body = self.gen_block_expr(ret_ty)
   
@@ -1081,7 +1086,7 @@ fn RandomGenerator::gen_local_func_def_stmt(self: Self) -> Stmt {
   self.var_env = old_var_env
   self.mutable_vars = old_mut_env
   
-  LocalFuncDef(params, Some(ret_ty), body)
+  LocalFuncDef(func_name, params, Some(ret_ty), body)
 }
 
 fn RandomGenerator::gen_expr_stmt(self: Self) -> Stmt {
@@ -1179,11 +1184,11 @@ fn RandomGenerator::estimate_stmt_lines(self: Self, stmt: Stmt) -> Int {
   match stmt {
     Let(_, _, _) => 1
     LetMut(_, _, _) => 1  
-    LetTuple(bindings, _, _) => 1
+    LetTuple(_, _, _) => 1
     Assign(_, _) => 1
     ExprStmt(_) => 1
     Return(_) => 1
-    LocalFuncDef(params, _, body) => 2 + params.length() + self.estimate_block_lines(body)
+    LocalFuncDef(_, params, _, body) => 2 + params.length() + self.estimate_block_lines(body)
     While(_, body) => 1 + self.estimate_block_lines(body)
   }
 }
