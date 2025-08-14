@@ -1,142 +1,5 @@
 typealias @Either.Either
 
-
-struct Env[K, V] {
-  map: Map[K, V]
-  parent: Env[K, V]?
-}
-
-fn[K, V] Env::new() -> Env[K, V] {
-  Env::{ map: Map::new(), parent: None }
-}
-
-fn[K, V] Env::sub_env(self: Self[K, V]) -> Env[K, V] {
-  Env::{ map: Map::new(), parent: Some(self) }
-}
-
-fn[K:Eq+Hash, V] Env::get(self: Self[K, V], key: K) -> V? {
-  match self.map.get(key) {
-    Some(value) => Some(value);
-    None => match self.parent {
-      Some(parent) => parent.get(key);
-      None => None;
-    }
-  }
-}
-
-fn[K:Eq+Hash, V] Env::set(self: Self[K, V], key: K, value: V) -> Unit {
-  self.map.set(key, value);
-}
-
-fn[K, V: Eq] Env::collect_keys_by_value(self: Self[K, V], value: V) -> Array[K] {
-  let keys = Array::new();
-  for pair in self.map {
-    let (key, v) = pair;
-    if v == value {
-      keys.push(key);
-    }
-  }
-  if self.parent is Some(parent) {
-    keys.append(parent.collect_keys_by_value(value));
-  }
-  keys
-}
-
-pub struct RandAstGenerator {
-  rand: @random.Rand
-  upper_max_len: Int
-  ident_max_len: Int
-  ty_env: Env[Upper, Type]
-  id_env: Env[Ident, Type]
-}
-
-pub fn RandAstGenerator::new(upper_max_len~: Int = 10, ident_max_len~:Int=10) -> RandAstGenerator {
-  RandAstGenerator::{
-    rand: @random.Rand::new(),
-    upper_max_len,
-    ident_max_len,
-    ty_env: Env::new(),
-    id_env: Env::new(),
-  }
-}
-
-///|
-pub fn RandAstGenerator::int(self: Self, limit: Int) -> Int {
-  self.rand.int(limit~)
-}
-
-///|
-///
-/// Always return positive integers.
-pub fn RandAstGenerator::pos_int(self: Self, limit: Int) -> Int {
-  let limit = limit.abs()
-  let limit = limit.reinterpret_as_uint()
-  self.rand.uint(limit~).reinterpret_as_int()
-}
-
-pub fn[T] RandAstGenerator::choice(self: Self, choices: Array[T]) -> T {
-  let length = choices.length();
-  if length == 0 {
-    println("Fetal Error: Cannot choose from an empty array");
-    panic()
-  }
-  let index = self.pos_int(length);
-  choices[index]
-}
-
-const UPPER_CHARS: String = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-const LOWER_CHARS: String = "abcdefghijklmnopqrstuvwxyz";
-const DIGITS: String = "0123456789";
-const IDENT_CHARS: String = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
-const NON_UPPER_CHARS: String = "abcdefghijklmnopqrstuvwxyz0123456789_";
-
-///|
-pub fn RandAstGenerator::gen_upper(self: Self) -> Upper {
-  fn helper() {
-    let str_builder = StringBuilder::new();
-    let first_char = self.choice(UPPER_CHARS.to_array());
-    str_builder.write_char(first_char);
-    for i in 0..<self.pos_int(self.upper_max_len) {
-      let c = self.choice(IDENT_CHARS.to_array());
-      str_builder.write_char(c);
-    }
-    Upper(str_builder.to_string())
-  }
-  let mut upper = helper()
-  if self.ty_env.get(upper) is Some(_) {
-    upper = helper()
-  }
-  upper
-}
-
-///|
-pub fn RandAstGenerator::gen_ident(self: Self) -> Ident {
-  fn helper() -> Ident {
-    let str_builder = StringBuilder::new();
-    let first_char = self.choice(NON_UPPER_CHARS.to_array());
-    str_builder.write_char(first_char);
-    for i in 0..<self.pos_int(self.ident_max_len) {
-      let c = self.choice(IDENT_CHARS.to_array());
-      str_builder.write_char(c);
-    }
-    Ident(str_builder.to_string())
-  }
-  let mut ident = helper();
-  while self.id_env.get(ident) is Some(_) {
-    ident = helper()
-  }
-  ident
-}
-
-pub fn RandAstGenerator::gen_double(self: Self) -> Double {
-  self.rand.double()
-}
-
-pub fn RandAstGenerator::gen_bool(self: Self) -> Bool {
-  self.rand.int() % 2 == 0
-}
-
-
 ///|
 pub(all) type Upper String derive(Hash, Eq)
 
@@ -852,6 +715,31 @@ pub impl Show for LeftValue with output(self, logger) {
   logger.write_string(s);
 }
 
+///| TopLet represents top-level let bindings with optional type annotations.
+/// These are global variable declarations that can be used throughout the program.
+///
+/// ```mbt
+/// let val42 = ValueExpr::IntExpr(42);
+/// let val42 = ApplyExpr::ValueExpr(val42);
+/// let val42 = IfLevelExpr::ApplyExpr(val42);
+/// let val42 = Expr::IfLevelExpr(val42);
+///
+/// // Top-level let without type annotation
+/// let top_let1 = TopLet::{ name: "global_var", ty: None, value: val42 };
+/// inspect(top_let1, content="let global_var = 42;")
+///
+/// // Top-level let with type annotation
+/// let top_let2 = TopLet::{ name: "typed_var", ty: Some(Type::Int), value: val42 };
+/// inspect(top_let2, content="let typed_var: Int = 42;")
+///
+/// // Top-level let with complex expression
+/// let array_val = ValueExpr::ArrayExpr([val42, val42]);
+/// let array_val = ApplyExpr::ValueExpr(array_val);
+/// let array_val = IfLevelExpr::ApplyExpr(array_val);
+/// let array_val = Expr::IfLevelExpr(array_val);
+/// let top_let3 = TopLet::{ name:"array_var", ty: Some(Type::Array(Type::Int)), value: array_val };
+/// inspect(top_let3, content="let array_var: Array[Int] = [42, 42];")
+/// ```
 pub(all) struct TopLet {
   name: Ident
   ty: Type?
@@ -866,6 +754,48 @@ pub impl Show for TopLet with output(self, logger) {
   logger.write_string("let \{self.name}\{ty_str} = \{self.value};");
 }
 
+///| TopFuncDef represents top-level function definitions with optional generic parameters.
+/// These are function declarations that can be called from anywhere in the program.
+///
+/// ```mbt
+/// let val42 = ValueExpr::IntExpr(42);
+/// let val42 = ApplyExpr::ValueExpr(val42);
+/// let val42 = IfLevelExpr::ApplyExpr(val42);
+/// let val42 = Expr::IfLevelExpr(val42);
+/// let body = BlockExpr::{ nested_level: 0, stmts: [], last_expr: Some(val42) };
+///
+/// // Simple function without generic parameters
+/// let params1 : Array[(Ident, Type)] = [("x", Int), ("y", Int)];
+/// let func1 = TopFuncDef::{ 
+///   generic_param: None, 
+///   name: "add", 
+///   params: params1, 
+///   ret_ty: Type::Int, 
+///   body 
+/// };
+/// inspect(func1, content="fn add(x: Int, y: Int) -> Int {\n  42\n}")
+///
+/// // Generic function with type parameter
+/// let params2: Array[(Ident, Type)] = [("x", GenericDef("T"))];
+/// let func2 = TopFuncDef::{ 
+///   generic_param: Some(Upper("T")), 
+///   name: "identity", 
+///   params: params2, 
+///   ret_ty: Type::GenericDef(Upper("T")), 
+///   body 
+/// };
+/// inspect(func2, content="fn[T] identity(x: T) -> T {\n  42\n}")
+///
+/// // Function with no parameters
+/// let func3 = TopFuncDef::{ 
+///   generic_param: None, 
+///   name: "get_answer", 
+///   params: [], 
+///   ret_ty: Type::Int, 
+///   body 
+/// };
+/// inspect(func3, content="fn get_answer() -> Int {\n  42\n}")
+/// ```
 pub(all) struct TopFuncDef {
   generic_param: Upper?
   name: Ident
@@ -884,6 +814,45 @@ pub impl Show for TopFuncDef with output(self, logger) {
   logger.write_string(self.body.to_string());
 }
 
+///| StructDef represents struct type definitions with optional generic parameters.
+/// Structs define custom data types with named fields.
+///
+/// ```mbt
+/// // Simple struct without generic parameters
+/// let fields1 : Array[(Ident, Type)] = [("x", Int), ("y", Int)];
+/// let struct1 = StructDef::{ 
+///   generic_param: None, 
+///   name: Upper("Point"), 
+///   fields: fields1 
+/// };
+/// let expect1 = 
+///   #|struct Point {
+///   #|  x: Int
+///   #|  y: Int
+///   #|}
+/// inspect(struct1, content=expect1)
+///
+/// // Generic struct with type parameter
+/// let fields2: Array[(Ident, Type)] = [("value", GenericDef("T"))];
+/// let struct2 = StructDef::{ 
+///   generic_param: Some(Upper("T")), 
+///   name: Upper("Container"), 
+///   fields: fields2 
+/// };
+/// let expect2 = 
+///   #|struct Container[T] {
+///   #|  value: T
+///   #|}
+/// inspect(struct2, content=expect2)
+///
+/// // Empty struct
+/// let struct3 = StructDef::{ 
+///   generic_param: None, 
+///   name: Upper("Empty"), 
+///   fields: [] 
+/// };
+/// inspect(struct3, content="struct Empty {}\n")
+/// ```
 pub(all) struct StructDef {
   generic_param: Upper?
   name: Upper
@@ -900,14 +869,66 @@ pub impl Show for StructDef with output(self, logger) {
     logger.write_string("}\n");
     return;
   }
-  let indent = "  "
+  logger.write_string("\n");
+  let indent = "  ";
   for field in self.fields {
     let (name, ty) = field;
     logger.write_string(indent);
-    logger.write_string("\{name}: \{ty};\n");
+    logger.write_string("\{name}: \{ty}\n");
   }
+  logger.write_string("}");
 }
 
+///| EnumDef represents enum type definitions with optional generic parameters.
+/// Enums define algebraic data types with multiple variants that can have associated data.
+///
+/// ```mbt
+/// // Simple enum without generic parameters and with various variant types
+/// let variants1 : Array[(Upper, Array[Type])] = [
+///   ("Red", []),
+///   ("Green", []),
+///   ("Blue", []),
+///   ("RGB", [Int, Int, Int])
+/// ];
+/// let enum1 = EnumDef::{ 
+///   generic_param: None, 
+///   name: Upper("Color"), 
+///   variants: variants1 
+/// };
+/// let expect1 = 
+///   #|enum Color {
+///   #|  Red
+///   #|  Green
+///   #|  Blue
+///   #|  RGB(Int, Int, Int)
+///   #|}
+/// inspect(enum1, content=expect1)
+///
+/// // Generic enum with type parameter
+/// let variants2 : Array[(Upper, Array[Type])] = [
+///   ("None", []),
+///   ("Some", [GenericDef("T")])
+/// ];
+/// let enum2 = EnumDef::{ 
+///   generic_param: Some(Upper("T")), 
+///   name: Upper("Option"), 
+///   variants: variants2 
+/// };
+/// let expect2 = 
+///   #|enum Option[T] {
+///   #|  None
+///   #|  Some(T)
+///   #|}
+/// inspect(enum2, content=expect2)
+///
+/// // Empty enum
+/// let enum3 = EnumDef::{ 
+///   generic_param: None, 
+///   name: Upper("Never"), 
+///   variants: [] 
+/// };
+/// inspect(enum3, content="enum Never {}\n")
+/// ```
 pub(all) struct EnumDef {
   generic_param: Upper?
   name: Upper
@@ -924,17 +945,46 @@ pub impl Show for EnumDef with output(self, logger) {
     logger.write_string("}\n");
     return;
   }
+  logger.write_string("\n");
   let indent = "  ";
   for variant in self.variants {
     let (name, fields) = variant;
     logger.write_string(indent);
     logger.write_string("\{name}");
     if fields.is_empty() {
-      logger.write_string(";\n");
+      logger.write_string("\n");
       continue;
     }
     let fields_str = fields.map(f => f.to_string()).join(", ");
     logger.write_string("(\{fields_str})");
-    logger.write_string(";\n");
+    logger.write_string("\n");
+  }
+  logger.write_string("}");
+}
+
+pub enum TopDecl {
+  TopLet(TopLet)
+  TopFuncDef(TopFuncDef)
+  StructDef(StructDef)
+  EnumDef(EnumDef)
+}
+
+pub impl Show for TopDecl with output(self, logger) {
+  match self {
+    TopLet(top_let) => logger.write_string(top_let.to_string());
+    TopFuncDef(top_func_def) => logger.write_string(top_func_def.to_string());
+    StructDef(struct_def) => logger.write_string(struct_def.to_string());
+    EnumDef(enum_def) => logger.write_string(enum_def.to_string());
+  }
+}
+
+pub struct Program {
+  top_decls: Array[TopDecl]
+}
+
+pub impl Show for Program with output(self, logger) {
+  for decl in self.top_decls {
+    logger.write_string(decl.to_string());
+    logger.write_string("\n\n");
   }
 }
