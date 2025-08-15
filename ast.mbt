@@ -1,5 +1,5 @@
 ///|
-pub(all) type Upper String derive(Hash, Eq)
+pub(all) struct Upper(String) derive(Hash, Eq)
 
 ///|
 pub impl Show for Upper with output(self, logger) {
@@ -7,7 +7,7 @@ pub impl Show for Upper with output(self, logger) {
 }
 
 ///|
-pub(all) type Ident String derive(Hash, Eq)
+pub(all) struct Ident(String) derive(Hash, Eq)
 
 ///|
 pub impl Show for Ident with output(self, logger) {
