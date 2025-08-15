@@ -1,22 +1,22 @@
-/// 增强的随机程序生成器 - 基于csmith思路，专注于生成复杂的类型安全的MiniMoonbit程序
+/// Enhanced random program generator - based on csmith approach, focused on generating complex type-safe MiniMoonbit programs
 
-///| 环境管理 - 用于跟踪变量和类型绑定
+/// Environment management - used to track variable and type bindings
 struct Env[K, V] {
   map : Map[K, V]
   parent : Env[K, V]?
 }
 
-///|
+/// Create a new environment
 fn[K, V] Env::new() -> Env[K, V] {
   { map: Map::new(), parent: None }
 }
 
-///|
+/// Create a sub-environment
 fn[K, V] Env::sub_env(self : Self[K, V]) -> Env[K, V] {
   { map: Map::new(), parent: Some(self) }
 }
 
-///|
+/// Get value from environment (searches parent environments if needed)
 fn[K : Eq + Hash, V] Env::get(self : Self[K, V], key : K) -> V? {
   match self.map.get(key) {
     Some(value) => Some(value)
@@ -28,12 +28,12 @@ fn[K : Eq + Hash, V] Env::get(self : Self[K, V], key : K) -> V? {
   }
 }
 
-///|
+/// Set value in current environment
 fn[K : Eq + Hash, V] Env::set(self : Self[K, V], key : K, value : V) -> Unit {
   self.map.set(key, value)
 }
 
-///|
+/// Collect all variables of a specific type from environment
 fn[K, V : Eq] Env::collect_vars_of_type(
   self : Self[K, V],
   target_type : V,
@@ -46,11 +46,11 @@ fn[K, V : Eq] Env::collect_vars_of_type(
   result
 }
 
-///| 生成器状态和配置
+/// Generator state and configuration
 pub struct RandProgGenerator {
   rand : @random.Rand
 
-  // 增强的配置参数，支持生成更复杂的程序
+  // Enhanced configuration parameters for generating complex programs
   max_depth : Int
   max_stmt_count : Int
   max_array_size : Int
@@ -59,44 +59,44 @@ pub struct RandProgGenerator {
   max_nested_level : Int
   total_lines_target : Int
 
-  // 环境
-  mut var_env : Env[Ident, Type] // 变量类型环境
-  mut mutable_vars : Env[Ident, Type] // 可变变量环境
-  mut unused_mutable_vars : Map[Ident, Type] // 未使用的可变变量（需要强制赋值）
-  type_env : Env[Upper, Type] // 自定义类型环境
+  // Environment tracking
+  mut var_env : Env[Ident, Type] // Variable type environment
+  mut mutable_vars : Env[Ident, Type] // Mutable variable environment
+  mut unused_mutable_vars : Map[Ident, Type] // Unused mutable variables (require forced assignment)
+  type_env : Env[Upper, Type] // Custom type environment
 
-  // 跟踪所有定义的变量和它们的使用情况
-  mut all_defined_vars : Map[Ident, Type] // 所有定义的变量
-  mut used_vars : Map[Ident, Bool] // 已使用的变量
+  // Track all defined variables and their usage
+  mut all_defined_vars : Map[Ident, Type] // All defined variables
+  mut used_vars : Map[Ident, Bool] // Used variables
 
-  // 已定义的类型和函数
+  // Defined types and functions
   struct_defs : Map[Upper, StructDef]
   enum_defs : Map[Upper, EnumDef]
   func_defs : Map[Ident, TopFuncDef]
 
-  // 名称计数器，用于确保唯一性
+  // Name counter for uniqueness
   mut name_counter : Int
 
-  // 当前上下文
+  // Current context
   mut current_return_type : Type
   mut current_depth : Int
   mut current_nested_level : Int
 
-  // 行数统计
+  // Line count tracking
   mut current_lines : Int
 }
 
-///|
+/// Create new random program generator
 pub fn RandProgGenerator::new(seed~ : Int = 0) -> RandProgGenerator {
   let g = RandProgGenerator::{
     rand: @random.Rand::new(),
-    max_depth: 4, // 减少最大深度避免栈溢出
-    max_stmt_count: 15, // 适中的语句数量
-    max_array_size: 5, // 适中的数组大小
-    max_tuple_size: 4, // 适中的元组大小
-    max_func_params: 4, // 适中的函数参数数量
-    max_nested_level: 3, // 减少嵌套层级限制
-    total_lines_target: 2000, // 目标行数
+    max_depth: 4, // Reduce max depth to avoid stack overflow
+    max_stmt_count: 15, // Moderate statement count
+    max_array_size: 5, // Moderate array size
+    max_tuple_size: 4, // Moderate tuple size
+    max_func_params: 4, // Moderate function parameter count
+    max_nested_level: 3, // Reduce nesting level limit
+    total_lines_target: 2000, // Target line count
     var_env: Env::new(),
     mutable_vars: Env::new(),
     unused_mutable_vars: Map::new(),
@@ -119,7 +119,7 @@ pub fn RandProgGenerator::new(seed~ : Int = 0) -> RandProgGenerator {
   g
 }
 
-///| 辅助函数
+/// Helper functions
 fn RandProgGenerator::rand_int(self : Self, max : Int) -> Int {
   if max <= 0 {
     return 0
@@ -127,17 +127,17 @@ fn RandProgGenerator::rand_int(self : Self, max : Int) -> Int {
   self.rand.int(limit=max)
 }
 
-///|
+/// Generate random boolean
 fn RandProgGenerator::rand_bool(self : Self) -> Bool {
   self.rand_int(2) == 0
 }
 
-///|
+/// Generate random double
 fn RandProgGenerator::rand_double(self : Self) -> Double {
-  self.rand.double() * 1000.0 // 扩大范围，生成更多样的浮点数
+  self.rand.double() * 1000.0 // Expand range to generate more diverse floating point numbers
 }
 
-///|
+/// Choose random element from array
 fn[T] RandProgGenerator::choice(self : Self, choices : Array[T]) -> T? {
   if choices.is_empty() {
     None
@@ -146,7 +146,7 @@ fn[T] RandProgGenerator::choice(self : Self, choices : Array[T]) -> T? {
   }
 }
 
-///|
+/// Weighted random choice
 fn[T] RandProgGenerator::weighted_choice(
   self : Self,
   choices : Array[(T, Int)],
@@ -167,11 +167,11 @@ fn[T] RandProgGenerator::weighted_choice(
     }
   }
 
-  // 备用选择
+  // Fallback choice
   self.choice(choices.map(fn(choice) { choice.0 }))
 }
 
-///| 生成标识符
+/// Generate identifier
 fn RandProgGenerator::gen_ident(self : Self) -> Ident {
   let names = [
     "x", "y", "z", "a", "b", "c", "value", "temp", "result", "data", "item", "elem",
@@ -184,7 +184,7 @@ fn RandProgGenerator::gen_ident(self : Self) -> Ident {
   Ident(base_name + self.name_counter.to_string())
 }
 
-///|
+/// Generate uppercase identifier
 fn RandProgGenerator::gen_upper(self : Self) -> Upper {
   let names = [
     "Point", "Node", "Item", "Data", "Result", "Option", "List", "Tree", "Value",
@@ -197,7 +197,7 @@ fn RandProgGenerator::gen_upper(self : Self) -> Upper {
   Upper(base_name + self.name_counter.to_string())
 }
 
-///| 生成基础类型
+/// Generate basic types
 fn RandProgGenerator::gen_basic_type(self : Self) -> Type {
   match self.rand_int(4) {
     0 => Unit
@@ -207,7 +207,7 @@ fn RandProgGenerator::gen_basic_type(self : Self) -> Type {
   }
 }
 
-///| 增强的类型生成器，支持更复杂的嵌套类型
+/// Enhanced type generator supporting more complex nested types
 fn RandProgGenerator::gen_type(self : Self, allow_complex : Bool) -> Type {
   if self.current_nested_level >= self.max_nested_level ||
     !allow_complex ||
@@ -215,14 +215,14 @@ fn RandProgGenerator::gen_type(self : Self, allow_complex : Bool) -> Type {
     return self.gen_basic_type()
   }
 
-  // 使用加权选择，基础类型权重更高，保证程序可编译
+  // Use weighted selection, basic types have higher weight to ensure compilable programs
   let choices = [
-    (0, 80), // 基础类型 - 大幅提高权重
-    (1, 10), // 数组类型 - 降低权重  
-    (2, 8), // 元组类型 - 降低权重
-    (3, 1), // 自定义结构体 - 极大降低权重
+    (0, 80), // Basic types - significantly increased weight
+    (1, 10), // Array types - reduced weight  
+    (2, 8), // Tuple types - reduced weight
+    (3, 1), // Custom struct types - greatly reduced weight
     (4, 1),
-  ] // 自定义枚举 - 极大降低权重
+  ] // Custom enum types - greatly reduced weight
   match self.weighted_choice(choices) {
     Some(0) => self.gen_basic_type()
     Some(1) => self.gen_array_type()
@@ -233,7 +233,7 @@ fn RandProgGenerator::gen_type(self : Self, allow_complex : Bool) -> Type {
   }
 }
 
-///|
+/// Generate array type
 fn RandProgGenerator::gen_array_type(self : Self) -> Type {
   self.current_nested_level = self.current_nested_level + 1
   let element_type = self.gen_type(true)
@@ -241,9 +241,9 @@ fn RandProgGenerator::gen_array_type(self : Self) -> Type {
   Array(element_type)
 }
 
-///|
+/// Generate tuple type
 fn RandProgGenerator::gen_tuple_type(self : Self) -> Type {
-  let size = self.rand_int(self.max_tuple_size - 1) + 2 // 至少2个元素
+  let size = self.rand_int(self.max_tuple_size - 1) + 2 // At least 2 elements
   let types = Array::new()
   self.current_nested_level = self.current_nested_level + 1
   for i = 0; i < size; i = i + 1 {
@@ -255,37 +255,37 @@ fn RandProgGenerator::gen_tuple_type(self : Self) -> Type {
   Tuple(types)
 }
 
-///|
+/// Generate custom struct type
 fn RandProgGenerator::gen_custom_struct_type(self : Self) -> Type {
-  // 从已定义的结构体中随机选择一个
+  // Randomly select from defined structs
   let available_structs = Array::new()
   self.struct_defs.each(fn(name, _) { available_structs.push(name) })
   match self.choice(available_structs) {
     Some(struct_name) =>
       match self.struct_defs.get(struct_name) {
         Some(struct_def) => struct_def.type_of()
-        None => self.gen_basic_type() // 备用方案
+        None => self.gen_basic_type() // Fallback
       }
-    None => self.gen_basic_type() // 如果没有可用的结构体，返回基础类型
+    None => self.gen_basic_type() // If no structs available, return basic type
   }
 }
 
-///|
+/// Generate custom enum type
 fn RandProgGenerator::gen_custom_enum_type(self : Self) -> Type {
-  // 从已定义的枚举中随机选择一个
+  // Randomly select from defined enums
   let available_enums = Array::new()
   self.enum_defs.each(fn(name, _) { available_enums.push(name) })
   match self.choice(available_enums) {
     Some(enum_name) =>
       match self.enum_defs.get(enum_name) {
         Some(enum_def) => enum_def.type_of()
-        None => self.gen_basic_type() // 备用方案
+        None => self.gen_basic_type() // Fallback
       }
-    None => self.gen_basic_type() // 如果没有可用的枚举，返回基础类型
+    None => self.gen_basic_type() // If no enums available, return basic type
   }
 }
 
-///| 查找指定类型的所有变量
+/// Find all variables of specified type
 fn RandProgGenerator::find_all_vars_of_type(
   self : Self,
   target_type : Type,
@@ -293,12 +293,12 @@ fn RandProgGenerator::find_all_vars_of_type(
   self.var_env.collect_vars_of_type(target_type)
 }
 
-///| 标记可变变量已被使用（从未使用列表中移除）
+/// Mark mutable variable as used (remove from unused list)
 fn RandProgGenerator::mark_mutable_var_used(
   self : Self,
   var_name : Ident,
 ) -> Unit {
-  // 创建新的Map来替代移除操作
+  // Create new Map to replace removal operation
   let new_map = Map::new()
   self.unused_mutable_vars.each(fn(name, ty) {
     if name != var_name {
@@ -308,7 +308,7 @@ fn RandProgGenerator::mark_mutable_var_used(
   self.unused_mutable_vars = new_map
 }
 
-///| 记录变量定义
+/// Record variable definition
 fn RandProgGenerator::record_var_definition(
   self : Self,
   var_name : Ident,
@@ -323,12 +323,12 @@ fn RandProgGenerator::record_var_definition(
   self.used_vars = {
     let new_map = Map::new()
     self.used_vars.each(fn(k, v) { new_map.set(k, v) })
-    new_map.set(var_name, false) // 初始标记为未使用
+    new_map.set(var_name, false) // Initially mark as unused
     new_map
   }
 }
 
-///| 标记变量已使用
+/// Mark variable as used
 fn RandProgGenerator::mark_var_used(self : Self, var_name : Ident) -> Unit {
   self.used_vars = {
     let new_map = Map::new()
@@ -338,40 +338,40 @@ fn RandProgGenerator::mark_var_used(self : Self, var_name : Ident) -> Unit {
   }
 }
 
-///| 安全地生成对未使用可变变量的强制赋值语句
+/// Safely generate forced assignment statements for unused mutable variables
 fn RandProgGenerator::gen_safe_force_assign_unused_mutables(
   self : Self,
 ) -> Array[Stmt] {
   let assignments = Array::new()
   self.unused_mutable_vars.each(fn(var_name, var_type) {
-    // 只有当变量在当前环境中确实可见时才生成赋值
+    // Only generate assignment if variable is actually visible in current environment
     match self.var_env.get(var_name) {
       Some(_) => {
         let new_value = self.gen_expr(var_type, true)
         let assign_stmt = Assign(LeftValue::Ident(var_name), new_value)
         assignments.push(assign_stmt)
       }
-      None => () // 变量不可见，跳过
+      None => () // Variable not visible, skip
     }
   })
 
-  // 清空未使用列表
+  // Clear unused list
   self.unused_mutable_vars = Map::new()
   assignments
 }
 
-///| 生成复杂的字面量表达式
+/// Generate complex literal expressions
 fn RandProgGenerator::gen_literal_expr(self : Self, ty : Type) -> Expr {
   match ty {
     Unit => IfLevelExpr(ApplyExpr(ValueExpr(UnitExpr)))
     Bool => IfLevelExpr(ApplyExpr(ValueExpr(BoolExpr(self.rand_bool()))))
     Int => {
-      // 生成更多样的整数
+      // Generate more diverse integers
       let value = match self.rand_int(4) {
-        0 => self.rand_int(10) // 小整数 0-9
-        1 => self.rand_int(1000) // 中等整数 0-999
-        2 => self.rand_int(100000) // 大整数 0-99999
-        _ => self.rand_int(2) * 2 - 1 // -1 或 1
+        0 => self.rand_int(10) // Small integers 0-9
+        1 => self.rand_int(1000) // Medium integers 0-999
+        2 => self.rand_int(100000) // Large integers 0-99999
+        _ => self.rand_int(2) * 2 - 1 // -1 or 1
       }
       IfLevelExpr(ApplyExpr(ValueExpr(IntExpr(value))))
     }
@@ -383,11 +383,11 @@ fn RandProgGenerator::gen_literal_expr(self : Self, ty : Type) -> Expr {
     Tuple(elem_types) => self.gen_tuple_expr(elem_types)
     Struct(name, fields) => self.gen_struct_construct_expr(name, fields)
     Enum(name, variants) => self.gen_enum_construct_expr(name, variants)
-    _ => IfLevelExpr(ApplyExpr(ValueExpr(UnitExpr))) // 对于其他类型，返回Unit
+    _ => IfLevelExpr(ApplyExpr(ValueExpr(UnitExpr))) // For other types, return Unit
   }
 }
 
-///| 生成结构体构造表达式
+/// Generate struct constructor expression
 fn RandProgGenerator::gen_struct_construct_expr(
   self : Self,
   name : Upper,
@@ -396,13 +396,13 @@ fn RandProgGenerator::gen_struct_construct_expr(
   let field_assignments = Array::new()
   for field in fields {
     let (field_name, field_type) = field
-    let field_value = self.gen_expr(field_type, true) // 字段值使用简单表达式
+    let field_value = self.gen_expr(field_type, true) // Use simple expressions for field values
     field_assignments.push((field_name, field_value))
   }
   IfLevelExpr(ApplyExpr(ValueExpr(StructConstruct(name, field_assignments))))
 }
 
-///| 生成枚举构造表达式
+/// Generate enum constructor expression
 fn RandProgGenerator::gen_enum_construct_expr(
   self : Self,
   name : Upper,
@@ -420,28 +420,28 @@ fn RandProgGenerator::gen_enum_construct_expr(
         ),
       )
     }
-    None => IfLevelExpr(ApplyExpr(ValueExpr(UnitExpr))) // 如果没有变体，返回Unit
+    None => IfLevelExpr(ApplyExpr(ValueExpr(UnitExpr))) // If no variants, return Unit
   }
 }
 
-///| 生成变量引用表达式 - 确保引用的变量在当前环境中确实存在
+/// Generate variable reference expression - ensure referenced variables actually exist in current environment
 fn RandProgGenerator::gen_var_expr(self : Self, ty : Type) -> Expr? {
-  // 首先查找当前环境中指定类型的变量
+  // First find variables of specified type in current environment
   let available_vars = self.var_env.collect_vars_of_type(ty)
   if available_vars.is_empty() {
     return None
   }
 
-  // 从可用变量中随机选择一个
+  // Randomly select from available variables
   match self.choice(available_vars) {
     Some(v) =>
-      // 再次验证变量确实存在
+      // Verify variable actually exists
       match self.var_env.get(v) {
         Some(_) => {
-          // 标记变量已使用
+          // Mark variable as used
           self.mark_var_used(v)
 
-          // 如果是可变变量，标记为已使用
+          // If mutable variable, mark as used
           match self.unused_mutable_vars.get(v) {
             Some(_) => self.mark_mutable_var_used(v)
             None => ()
@@ -454,7 +454,7 @@ fn RandProgGenerator::gen_var_expr(self : Self, ty : Type) -> Expr? {
   }
 }
 
-///| 生成复杂的数组表达式
+/// Generate complex array expressions
 fn RandProgGenerator::gen_array_expr(self : Self, elem_type : Type) -> Expr {
   match self.rand_int(2) {
     0 => {
@@ -465,8 +465,8 @@ fn RandProgGenerator::gen_array_expr(self : Self, elem_type : Type) -> Expr {
       IfLevelExpr(ApplyExpr(ValueExpr(ArrayMake(size_expr, init_expr))))
     }
     _ => {
-      // [elem1, elem2, ...] - 确保至少有一个元素
-      let size = self.rand_int(self.max_array_size) + 1 // 至少1个元素
+      // [elem1, elem2, ...] - ensure at least one element
+      let size = self.rand_int(self.max_array_size) + 1 // At least 1 element
       let elements = Array::new()
       for i = 0; i < size; i = i + 1 {
         elements.push(self.gen_expr(elem_type, true))
@@ -476,7 +476,7 @@ fn RandProgGenerator::gen_array_expr(self : Self, elem_type : Type) -> Expr {
   }
 }
 
-///| 生成复杂的元组表达式
+/// Generate complex tuple expressions
 fn RandProgGenerator::gen_tuple_expr(
   self : Self,
   elem_types : Array[Type],
@@ -488,20 +488,20 @@ fn RandProgGenerator::gen_tuple_expr(
   IfLevelExpr(ApplyExpr(ValueExpr(TupleExpr(elements))))
 }
 
-///| 生成函数调用表达式 - 确保只调用确实存在且可访问的函数
+/// Generate function call expression - ensure only calling actually existing and accessible functions
 fn RandProgGenerator::gen_function_call_expr(
   self : Self,
   expected_return_type : Type,
 ) -> Expr? {
-  // 查找返回类型匹配的函数（包括顶层函数和当前作用域中的局部函数）
+  // Find functions with matching return type (including top-level and local functions in current scope)
   let available_funcs = Array::new()
 
-  // 查找当前环境中的函数类型变量（局部函数） - 只检查当前可访问的
+  // Find function type variables in current environment (local functions) - only check currently accessible ones
   self.var_env.map.each(fn(var_name, var_type) {
     match var_type {
       Func(param_types, return_type) =>
         if return_type == expected_return_type {
-          // 再次验证函数确实存在于当前环境中
+          // Verify function actually exists in current environment
           match self.var_env.get(var_name) {
             Some(_) => available_funcs.push((var_name, param_types))
             None => ()
@@ -511,7 +511,7 @@ fn RandProgGenerator::gen_function_call_expr(
     }
   })
 
-  // 只在有很少的可用函数时才考虑顶层函数，避免复杂性
+  // Only consider top-level functions when there are few available functions, to avoid complexity
   if available_funcs.length() < 2 {
     self.func_defs.each(fn(func_name, func_def) {
       if func_def.ret_ty == expected_return_type &&
@@ -524,7 +524,7 @@ fn RandProgGenerator::gen_function_call_expr(
     Some((func_name, param_types)) => {
       let args = Array::new()
       for param_type in param_types {
-        args.push(self.gen_expr(param_type, true)) // 使用简单表达式
+        args.push(self.gen_expr(param_type, true)) // Use simple expressions
       }
       let func_apply = ApplyExpr::ValueExpr(ValueExpr::IdentExpr(func_name))
       Some(IfLevelExpr(ApplyExpr(Call(func_apply, args))))
@@ -533,12 +533,12 @@ fn RandProgGenerator::gen_function_call_expr(
   }
 }
 
-///| 生成数组访问表达式
+/// Generate array access expression
 fn RandProgGenerator::gen_array_access_expr(
   self : Self,
   elem_type : Type,
 ) -> Expr? {
-  // 查找数组类型的变量
+  // Find array type variables
   let array_vars = self.find_all_vars_of_type(Array(elem_type))
   match self.choice(array_vars) {
     Some(array_var) => {
@@ -550,12 +550,12 @@ fn RandProgGenerator::gen_array_access_expr(
   }
 }
 
-///| 生成点访问表达式（结构体字段访问）
+/// Generate dot access expression (struct field access)
 fn RandProgGenerator::gen_dot_access_expr(
   self : Self,
   expected_type : Type,
 ) -> Expr? {
-  // 查找具有匹配字段类型的结构体变量
+  // Find struct variables with matching field types
   let candidates = Array::new()
   self.var_env.map.each(fn(var_name, var_type) {
     match var_type {
@@ -578,16 +578,16 @@ fn RandProgGenerator::gen_dot_access_expr(
   }
 }
 
-///| 增强的表达式生成器，支持更复杂的表达式结构
+/// Enhanced expression generator supporting more complex expression structures
 pub fn RandProgGenerator::gen_expr(self : Self, ty : Type, simple : Bool) -> Expr {
   if self.current_depth >= self.max_depth || simple {
-    // 在最大深度或要求简单表达式时，优先生成字面量或变量引用
+    // At max depth or when simple expressions required, prioritize literals or variable references
     let choices = [
-      (0, 60), // 字面量 - 大幅提高权重
-      (1, 35), // 变量引用 - 提高权重
-      (2, 3), // 函数调用 - 大幅降低权重
+      (0, 60), // Literals - significantly increased weight
+      (1, 35), // Variable references - increased weight
+      (2, 3), // Function calls - significantly reduced weight
       (3, 2),
-    ] // 字段访问 - 大幅降低权重
+    ] // Field access - significantly reduced weight
     match self.weighted_choice(choices) {
       Some(0) => self.gen_literal_expr(ty)
       Some(1) =>
@@ -625,15 +625,15 @@ pub fn RandProgGenerator::gen_expr(self : Self, ty : Type, simple : Bool) -> Exp
   }
 }
 
-///| 生成复杂的Unit表达式
+/// Generate complex Unit expressions
 fn RandProgGenerator::gen_complex_unit_expr(self : Self) -> Expr {
   let choices = [
-    (0, 40), // 字面量Unit
-    (1, 20), // 变量引用
-    (2, 15), // 函数调用
-    (3, 15), // if表达式
+    (0, 40), // Literal Unit
+    (1, 20), // Variable reference
+    (2, 15), // Function call
+    (3, 15), // If expression
     (4, 10),
-  ] // 表达式语句
+  ] // Expression statement
   match self.weighted_choice(choices) {
     Some(0) => self.gen_literal_expr(Unit)
     Some(1) =>
@@ -652,7 +652,7 @@ fn RandProgGenerator::gen_complex_unit_expr(self : Self) -> Expr {
         None => self.gen_literal_expr(Unit)
       }
     Some(4) => {
-      // 生成一个包含Unit表达式的组合表达式
+      // Generate a compound expression containing Unit expression
       let inner_expr = self.gen_expr(Unit, true)
       IfLevelExpr(ApplyExpr(ValueExpr(GroupExpr(inner_expr))))
     }
@@ -660,17 +660,17 @@ fn RandProgGenerator::gen_complex_unit_expr(self : Self) -> Expr {
   }
 }
 
-///| 生成复杂的Bool表达式
+/// Generate complex Bool expressions
 fn RandProgGenerator::gen_complex_bool_expr(self : Self) -> Expr {
   let choices = [
-    (0, 20), // 字面量Bool
-    (1, 18), // 变量引用
-    (2, 18), // 比较表达式
-    (3, 15), // 逻辑表达式
-    (4, 12), // if表达式
-    (5, 10), // 函数调用
+    (0, 20), // Literal Bool
+    (1, 18), // Variable reference
+    (2, 18), // Comparison expression
+    (3, 15), // Logical expression
+    (4, 12), // If expression
+    (5, 10), // Function call
     (6, 7),
-  ] // 取反表达式
+  ] // Negation expression
   match self.weighted_choice(choices) {
     Some(0) => self.gen_literal_expr(Bool)
     Some(1) =>
@@ -698,17 +698,17 @@ fn RandProgGenerator::gen_complex_bool_expr(self : Self) -> Expr {
   }
 }
 
-///| 生成复杂的Int表达式
+/// Generate complex Int expressions
 fn RandProgGenerator::gen_complex_int_expr(self : Self) -> Expr {
   let choices = [
-    (0, 35), // 字面量Int
-    (1, 30), // 变量引用
-    (2, 15), // 算术表达式
-    (3, 8), // if表达式
-    (4, 5), // 函数调用
-    (5, 4), // match表达式
-    (6, 2), // 数组访问
-    (7, 1), // 字段访问
+    (0, 35), // Literal Int
+    (1, 30), // Variable reference
+    (2, 15), // Arithmetic expression
+    (3, 8), // If expression
+    (4, 5), // Function call
+    (5, 4), // Match expression
+    (6, 2), // Array access
+    (7, 1), // Field access
   ]
   match self.weighted_choice(choices) {
     Some(0) => self.gen_literal_expr(Int)
@@ -747,17 +747,17 @@ fn RandProgGenerator::gen_complex_int_expr(self : Self) -> Expr {
   }
 }
 
-///| 生成复杂的Double表达式
+/// Generate complex Double expressions
 fn RandProgGenerator::gen_complex_double_expr(self : Self) -> Expr {
   let choices = [
-    (0, 25), // 字面量Double
-    (1, 20), // 变量引用
-    (2, 20), // 算术表达式
-    (3, 12), // if表达式
-    (4, 10), // 函数调用
-    (5, 8), // match表达式
-    (6, 3), // 数组访问
-    (7, 2), // 字段访问
+    (0, 25), // Literal Double
+    (1, 20), // Variable reference
+    (2, 20), // Arithmetic expression
+    (3, 12), // If expression
+    (4, 10), // Function call
+    (5, 8), // Match expression
+    (6, 3), // Array access
+    (7, 2), // Field access
   ]
   match self.weighted_choice(choices) {
     Some(0) => self.gen_literal_expr(Double)
@@ -796,18 +796,18 @@ fn RandProgGenerator::gen_complex_double_expr(self : Self) -> Expr {
   }
 }
 
-///| 生成复杂的Array表达式
+/// Generate complex Array expressions
 fn RandProgGenerator::gen_complex_array_expr(
   self : Self,
   elem_type : Type,
 ) -> Expr {
   let choices = [
-    (0, 30), // 数组字面量
-    (1, 25), // 变量引用
+    (0, 30), // Array literal
+    (1, 25), // Variable reference
     (2, 20), // Array::make
-    (3, 15), // 函数调用
+    (3, 15), // Function call
     (4, 10),
-  ] // 字段访问
+  ] // Field access
   match self.weighted_choice(choices) {
     Some(0) => self.gen_array_expr(elem_type)
     Some(1) =>
@@ -816,7 +816,7 @@ fn RandProgGenerator::gen_complex_array_expr(
         None => self.gen_array_expr(elem_type)
       }
     Some(2) => {
-      // 确保Array::make的第一个参数至少为1
+      // Ensure Array::make first parameter is at least 1
       let size_val = self.rand_int(self.max_array_size) + 1
       let size_expr = IfLevelExpr(ApplyExpr(ValueExpr(IntExpr(size_val))))
       let init_expr = self.gen_expr(elem_type, false)
@@ -836,17 +836,17 @@ fn RandProgGenerator::gen_complex_array_expr(
   }
 }
 
-///| 生成复杂的Tuple表达式
+/// Generate complex Tuple expressions
 fn RandProgGenerator::gen_complex_tuple_expr(
   self : Self,
   elem_types : Array[Type],
 ) -> Expr {
   let choices = [
-    (0, 40), // 元组字面量
-    (1, 25), // 变量引用
-    (2, 20), // 函数调用
+    (0, 40), // Tuple literal
+    (1, 25), // Variable reference
+    (2, 20), // Function call
     (3, 15),
-  ] // 字段访问
+  ] // Field access
   match self.weighted_choice(choices) {
     Some(0) => self.gen_tuple_expr(elem_types)
     Some(1) =>
@@ -868,18 +868,18 @@ fn RandProgGenerator::gen_complex_tuple_expr(
   }
 }
 
-///| 生成复杂的Struct表达式
+/// Generate complex Struct expressions
 fn RandProgGenerator::gen_complex_struct_expr(
   self : Self,
   name : Upper,
   fields : Array[(Ident, Type)],
 ) -> Expr {
   let choices = [
-    (0, 40), // 结构体构造
-    (1, 30), // 变量引用
-    (2, 20), // 函数调用
+    (0, 40), // Struct constructor
+    (1, 30), // Variable reference
+    (2, 20), // Function call
     (3, 10),
-  ] // 字段访问
+  ] // Field access
   match self.weighted_choice(choices) {
     Some(0) => self.gen_struct_construct_expr(name, fields)
     Some(1) =>
@@ -901,18 +901,18 @@ fn RandProgGenerator::gen_complex_struct_expr(
   }
 }
 
-///| 生成复杂的Enum表达式
+/// Generate complex Enum expressions
 fn RandProgGenerator::gen_complex_enum_expr(
   self : Self,
   name : Upper,
   variants : Array[(Upper, Array[Type])],
 ) -> Expr {
   let choices = [
-    (0, 40), // 枚举构造
-    (1, 30), // 变量引用
-    (2, 20), // 函数调用
+    (0, 40), // Enum constructor
+    (1, 30), // Variable reference
+    (2, 20), // Function call
     (3, 10),
-  ] // 字段访问
+  ] // Field access
   match self.weighted_choice(choices) {
     Some(0) => self.gen_enum_construct_expr(name, variants)
     Some(1) =>
@@ -934,9 +934,9 @@ fn RandProgGenerator::gen_complex_enum_expr(
   }
 }
 
-///| 生成算术表达式 (仅适用于Int和Double)
+/// Generate arithmetic expressions (only for Int and Double)
 fn RandProgGenerator::gen_arithmetic_expr(self : Self, ty : Type) -> Expr {
-  // 始终生成简单的双操作数表达式，避免无限递归
+  // Always generate simple binary expressions to avoid infinite recursion
   let left = self.gen_expr(ty, true)
   let right = self.gen_expr(ty, true)
   match self.rand_int(5) {
@@ -948,17 +948,17 @@ fn RandProgGenerator::gen_arithmetic_expr(self : Self, ty : Type) -> Expr {
   }
 }
 
-///| 生成比较表达式 (返回Bool)
+/// Generate comparison expressions (returns Bool)
 fn RandProgGenerator::gen_comparison_expr(self : Self) -> Expr {
   let ty = if self.rand_bool() { Type::Int } else { Type::Double }
 
-  // 生成简单比较，避免递归复杂度
+  // Generate simple comparison to avoid recursive complexity
   let left = self.gen_expr(ty, true)
   let right = self.gen_expr(ty, true)
   self.make_comparison(left, right)
 }
 
-///|
+/// Helper function to create comparison
 fn RandProgGenerator::make_comparison(
   self : Self,
   left : Expr,
@@ -975,39 +975,39 @@ fn RandProgGenerator::make_comparison(
   CmpExpr(op, left, right)
 }
 
-///| 生成逻辑表达式 (返回Bool)
+/// Generate logical expressions (returns Bool)
 fn RandProgGenerator::gen_logical_expr(self : Self) -> Expr {
   match self.rand_int(2) {
     0 => {
-      // AND 表达式
-      let left = self.gen_expr(Bool, true) // 使用简单表达式
+      // AND expression
+      let left = self.gen_expr(Bool, true) // Use simple expressions
       let right = self.gen_expr(Bool, true)
       AndExpr(left, right)
     }
     _ => {
-      // OR 表达式
-      let left = self.gen_expr(Bool, true) // 使用简单表达式
+      // OR expression
+      let left = self.gen_expr(Bool, true) // Use simple expressions
       let right = self.gen_expr(Bool, true)
       OrExpr(left, right)
     }
   }
 }
 
-///| 生成if表达式
+/// Generate if expressions
 pub fn RandProgGenerator::gen_if_expr(self : Self, expected_type : Type) -> Expr? {
-  // 防止过深的嵌套
+  // Prevent overly deep nesting
   if self.current_depth >= self.max_depth - 1 {
     return None
   }
 
-  // 生成条件表达式（使用当前环境，不要引入新变量）
+  // Generate condition expression (use current environment, don't introduce new variables)
   let cond = self.gen_expr(Bool, true)
 
-  // 生成then块，重要：不要创建新的子环境，因为if表达式不应该引入新的作用域
+  // Generate then block, important: don't create new sub-environment, since if expressions shouldn't introduce new scope
   let old_depth = self.current_depth
   self.current_depth = self.current_depth + 1
 
-  // 生成then块 - 只使用表达式，不添加新变量声明
+  // Generate then block - only use expressions, don't add new variable declarations
   let then_block = if expected_type == Unit {
     let block = BlockExpr::new(nested_level=self.current_depth - 1)
     let unit_expr = self.gen_expr(Unit, true)
@@ -1015,22 +1015,22 @@ pub fn RandProgGenerator::gen_if_expr(self : Self, expected_type : Type) -> Expr
     block
   } else {
     let block = BlockExpr::new(nested_level=self.current_depth - 1)
-    // 直接生成返回表达式，不生成语句避免作用域问题
-    let return_expr = self.gen_expr(expected_type, true) // 使用简单表达式
+    // Directly generate return expression, don't generate statements to avoid scope issues
+    let return_expr = self.gen_expr(expected_type, true) // Use simple expressions
     block.set_last_expr(return_expr)
     block
   }
 
-  // 生成else块 - 同样不创建新的作用域
+  // Generate else block - also don't create new scope
   let else_part = if self.rand_bool() == true &&
     self.current_depth < self.max_depth - 2 {
-    // 生成else if，但要小心递归深度
+    // Generate else if, but be careful with recursion depth
     match self.gen_if_expr(expected_type) {
       Some(nested_if) =>
         match nested_if {
           IfLevelExpr(IfExpr(if_expr)) => Either::Left(if_expr)
           _ => {
-            // 如果不是if表达式，创建一个简单的else块
+            // If not an if expression, create simple else block
             let else_block = BlockExpr::new(nested_level=self.current_depth - 1)
             let else_expr = self.gen_expr(expected_type, true)
             else_block.set_last_expr(else_expr)
@@ -1038,7 +1038,7 @@ pub fn RandProgGenerator::gen_if_expr(self : Self, expected_type : Type) -> Expr
           }
         }
       None => {
-        // 生成简单的else块
+        // Generate simple else block
         let else_block = BlockExpr::new(nested_level=self.current_depth - 1)
         let else_expr = self.gen_expr(expected_type, true)
         else_block.set_last_expr(else_expr)
@@ -1046,53 +1046,53 @@ pub fn RandProgGenerator::gen_if_expr(self : Self, expected_type : Type) -> Expr
       }
     }
   } else {
-    // 生成简单的else块
+    // Generate simple else block
     let else_block = BlockExpr::new(nested_level=self.current_depth - 1)
     let else_expr = self.gen_expr(expected_type, true)
     else_block.set_last_expr(else_expr)
     Either::Right(else_block)
   }
 
-  // 恢复深度
+  // Restore depth
   self.current_depth = old_depth
   let if_expr = IfExpr::{ cond, then_: then_block, else_: else_part }
   Some(IfLevelExpr(IfExpr(if_expr)))
 }
 
-///| 生成match表达式
+/// Generate match expressions
 pub fn RandProgGenerator::gen_match_expr(
   self : Self,
   expected_type : Type,
 ) -> Expr? {
-  // 防止过深的嵌套
+  // Prevent overly deep nesting
   if self.current_depth >= self.max_depth - 1 {
     return None
   }
 
-  // 选择一个合适的类型用于匹配
+  // Select appropriate type for matching
   let match_type = match self.rand_int(4) {
     0 => Type::Bool
     1 => Type::Int
     2 => {
-      // 尝试使用已定义的枚举类型
+      // Try to use defined enum types
       let available_enums = Array::new()
       self.enum_defs.each(fn(_, enum_def) {
         available_enums.push(enum_def.type_of())
       })
       match self.choice(available_enums) {
         Some(enum_type) => enum_type
-        None => Type::Bool // 备用方案
+        None => Type::Bool // Fallback
       }
     }
     _ =>
-      // 简单的元组类型
+      // Simple tuple type
       Type::Tuple([Type::Int, Type::Bool])
   }
 
-  // 生成匹配表达式
+  // Generate match expression
   let match_expr_val = self.gen_expr(match_type, true)
 
-  // 创建子环境
+  // Create sub-environment
   let old_var_env = self.var_env
   let old_mut_env = self.mutable_vars
   let old_depth = self.current_depth
@@ -1100,10 +1100,10 @@ pub fn RandProgGenerator::gen_match_expr(
   self.mutable_vars = old_mut_env.sub_env()
   self.current_depth = self.current_depth + 1
 
-  // 生成匹配分支
+  // Generate match arms
   let arms = self.gen_match_arms(match_type, expected_type)
 
-  // 恢复环境
+  // Restore environment
   self.var_env = old_var_env
   self.mutable_vars = old_mut_env
   self.current_depth = old_depth
@@ -1119,7 +1119,7 @@ pub fn RandProgGenerator::gen_match_expr(
   }
 }
 
-///| 生成匹配分支
+/// Generate match arms
 fn RandProgGenerator::gen_match_arms(
   self : Self,
   match_type : Type,
@@ -1128,33 +1128,33 @@ fn RandProgGenerator::gen_match_arms(
   let arms = Array::new()
   match match_type {
     Bool => {
-      // 布尔类型的匹配
+      // Boolean type matching
       let true_expr = self.gen_expr(result_type, true)
       let false_expr = self.gen_expr(result_type, true)
       arms.push((Pattern::Bool(true), true_expr))
       arms.push((Pattern::Bool(false), false_expr))
     }
     Int => {
-      // 整数类型的匹配
-      let arm_count = self.rand_int(3) + 2 // 2-4个分支
+      // Integer type matching
+      let arm_count = self.rand_int(3) + 2 // 2-4 arms
       for i = 0; i < arm_count - 1; i = i + 1 {
         let pattern_val = self.rand_int(10)
         let arm_expr = self.gen_expr(result_type, true)
         arms.push((Pattern::Number(pattern_val), arm_expr))
       }
-      // 添加通配符分支
+      // Add wildcard arm
       let wildcard_expr = self.gen_expr(result_type, true)
       arms.push((Pattern::WildCard, wildcard_expr))
     }
     Enum(enum_name, variants) =>
-      // 枚举类型的匹配
+      // Enum type matching
       for variant in variants {
         let (variant_name, variant_types) = variant
         let patterns = Array::new()
         for variant_type in variant_types {
-          // 生成简单的模式
+          // Generate simple patterns
           match variant_type {
-            Int => patterns.push(Pattern::WildCard) // 简化为通配符
+            Int => patterns.push(Pattern::WildCard) // Simplify to wildcards
             Bool => patterns.push(Pattern::WildCard)
             _ => patterns.push(Pattern::WildCard)
           }
@@ -1168,10 +1168,10 @@ fn RandProgGenerator::gen_match_arms(
         )
       }
     Tuple(elem_types) => {
-      // 元组类型的匹配
+      // Tuple type matching
       let patterns = Array::new()
       for elem_type in elem_types {
-        // 生成简单的模式
+        // Generate simple patterns
         match elem_type {
           Int =>
             if self.rand_bool() == true {
@@ -1191,12 +1191,12 @@ fn RandProgGenerator::gen_match_arms(
       let arm_expr = self.gen_expr(result_type, true)
       arms.push((Pattern::Tuple(patterns), arm_expr))
 
-      // 添加通配符分支
+      // Add wildcard arm
       let wildcard_expr = self.gen_expr(result_type, true)
       arms.push((Pattern::WildCard, wildcard_expr))
     }
     _ => {
-      // 其他类型使用通配符
+      // Other types use wildcards
       let wildcard_expr = self.gen_expr(result_type, true)
       arms.push((Pattern::WildCard, wildcard_expr))
     }
@@ -1204,17 +1204,17 @@ fn RandProgGenerator::gen_match_arms(
   arms
 }
 
-///| 增强的语句生成器，支持更多种类的语句
+/// Enhanced statement generator supporting more statement types
 pub fn RandProgGenerator::gen_stmt(self : Self) -> Stmt {
-  // 根据深度和行数目标调整语句复杂度
+  // Adjust statement complexity based on depth and line count target
   if self.current_depth >= self.max_depth - 1 {
-    // 在深度较大时，生成简单语句
+    // At greater depth, generate simple statements
     let choices = [
-      (0, 50), // let语句 - 增加权重
-      (1, 30), // let mut语句 - 增加权重
-      (2, 15), // 赋值语句
+      (0, 50), // Let statements - increased weight
+      (1, 30), // Let mut statements - increased weight
+      (2, 15), // Assignment statements
       (3, 5),
-    ] // 表达式语句 - 大幅减少权重
+    ] // Expression statements - significantly reduced weight
     match self.weighted_choice(choices) {
       Some(0) => self.gen_let_stmt()
       Some(1) => self.gen_expr_stmt()
@@ -1223,16 +1223,16 @@ pub fn RandProgGenerator::gen_stmt(self : Self) -> Stmt {
       _ => self.gen_let_stmt()
     }
   } else {
-    // 在较浅深度时，可以生成更复杂的语句，确保可变变量得到使用
+    // At shallower depth, can generate more complex statements, ensure mutable variables get used
     let choices = [
-      (0, 35), // let语句 - 适中权重
-      (1, 20), // let mut语句 - 减少权重，避免生成过多未使用的可变变量
-      (2, 25), // 赋值语句 - 增加权重，确保可变变量被使用
-      (3, 8), // 表达式语句 - 减少权重
-      (4, 5), // while循环 - 正常权重
-      (5, 3), // 元组解构let - 减少权重
-      (6, 1), // return语句 - 减少权重
-      (7, 1), // 局部函数定义 - 大幅减少权重
+      (0, 35), // Let statements - moderate weight
+      (1, 20), // Let mut statements - reduced weight to avoid too many unused mutable variables
+      (2, 25), // Assignment statements - increased weight to ensure mutable variables are used
+      (3, 8), // Expression statements - reduced weight
+      (4, 5), // While loops - normal weight
+      (5, 3), // Tuple destructuring let - reduced weight
+      (6, 1), // Return statements - reduced weight
+      (7, 1), // Local function definitions - greatly reduced weight
     ]
     match self.weighted_choice(choices) {
       Some(0) => self.gen_let_stmt()
@@ -1248,19 +1248,19 @@ pub fn RandProgGenerator::gen_stmt(self : Self) -> Stmt {
   }
 }
 
-///|
+/// Generate let statement
 pub fn RandProgGenerator::gen_let_stmt(self : Self) -> Stmt {
   let var_name = self.gen_ident()
   let var_type = self.gen_type(true)
   let init_expr = self.gen_expr(var_type, false)
 
-  // 将变量添加到环境中
+  // Add variable to environment
   self.var_env.set(var_name, var_type)
 
-  // 记录变量定义
+  // Record variable definition
   self.record_var_definition(var_name, var_type)
 
-  // 更频繁地生成类型注解，提高代码可读性
+  // Generate type annotations more frequently to improve code readability
   let type_annotation = if self.rand_int(10) < 7 {
     Some(var_type)
   } else {
@@ -1269,20 +1269,20 @@ pub fn RandProgGenerator::gen_let_stmt(self : Self) -> Stmt {
   Let(var_name, type_annotation, init_expr)
 }
 
-///|
+/// Generate let mut statement
 pub fn RandProgGenerator::gen_let_mut_stmt(self : Self) -> Stmt {
   let var_name = self.gen_ident()
   let var_type = self.gen_type(true)
   let init_expr = self.gen_expr(var_type, false)
 
-  // 将变量添加到环境中（包括可变变量环境）
+  // Add variable to environment (including mutable variable environment)
   self.var_env.set(var_name, var_type)
   self.mutable_vars.set(var_name, var_type)
 
-  // 记录变量定义
+  // Record variable definition
   self.record_var_definition(var_name, var_type)
 
-  // 将变量添加到未使用的可变变量列表中
+  // Add variable to unused mutable variables list
   self.unused_mutable_vars.set(var_name, var_type)
   let type_annotation = if self.rand_int(10) < 7 {
     Some(var_type)
@@ -1292,35 +1292,35 @@ pub fn RandProgGenerator::gen_let_mut_stmt(self : Self) -> Stmt {
   LetMut(var_name, type_annotation, init_expr)
 }
 
-///| 生成元组解构let语句
+/// Generate tuple destructuring let statement
 pub fn RandProgGenerator::gen_let_tuple_stmt(self : Self) -> Stmt {
-  let tuple_size = self.rand_int(self.max_tuple_size - 1) + 2 // 至少2个元素
+  let tuple_size = self.rand_int(self.max_tuple_size - 1) + 2 // At least 2 elements
   let bindings = Array::new()
   let types = Array::new()
 
-  // 首先确定所有类型
+  // First determine all types
   for i = 0; i < tuple_size; i = i + 1 {
     let elem_type = self.gen_type(false)
     types.push(elem_type)
   }
 
-  // 生成元组表达式（不能引用即将被绑定的变量）
+  // Generate tuple expression (cannot reference variables that are about to be bound)
   let tuple_type = Type::Tuple(types)
   let tuple_expr = self.gen_expr(tuple_type, false)
 
-  // 然后生成绑定并将变量添加到环境（在生成表达式之后）
+  // Then generate bindings and add variables to environment (after generating expression)
   for i = 0; i < tuple_size; i = i + 1 {
     let elem_type = types[i]
     if self.rand_bool() == true {
-      // 生成标识符绑定
+      // Generate identifier binding
       let var_name = self.gen_ident()
       bindings.push(Binding::Ident(var_name))
-      // 在生成表达式后才添加到环境，避免循环引用
+      // Only add to environment after generating expression to avoid circular reference
       self.var_env.set(var_name, elem_type)
-      // 记录变量定义
+      // Record variable definition
       self.record_var_definition(var_name, elem_type)
     } else {
-      // 生成通配符绑定
+      // Generate wildcard binding
       bindings.push(Binding::WhileCard)
     }
   }
@@ -1332,44 +1332,44 @@ pub fn RandProgGenerator::gen_let_tuple_stmt(self : Self) -> Stmt {
   LetTuple(bindings, type_annotation, tuple_expr)
 }
 
-///|
+/// Generate assignment statement
 pub fn RandProgGenerator::gen_assign_stmt(self : Self) -> Stmt {
-  // 获取所有可变变量（包括父环境中的）
+  // Get all mutable variables (including those in parent environments)
   let mut_vars = Array::new()
   self.collect_mutable_vars_recursive(self.mutable_vars, mut_vars)
   if mut_vars.is_empty() {
-    // 如果没有可变变量，生成一个let语句
+    // If no mutable variables, generate a let statement
     return self.gen_let_stmt()
   }
   let (var_name, var_type) = self.choice(mut_vars).unwrap()
 
-  // 验证变量确实存在于当前可访问的环境中
+  // Verify variable actually exists in currently accessible environment
   match self.var_env.get(var_name) {
     Some(_) => {
-      // 变量确实存在，可以安全赋值
+      // Variable actually exists, can safely assign
       self.mark_mutable_var_used(var_name)
 
-      // 根据变量类型生成合适的左值，但要确保简单性避免复杂的访问模式
-      let left_value = LeftValue::Ident(var_name) // 始终使用简单的变量赋值
-      let new_value = self.gen_expr(var_type, true) // 使用简单表达式避免复杂性
+      // Generate appropriate left value based on variable type, but ensure simplicity to avoid complex access patterns
+      let left_value = LeftValue::Ident(var_name) // Always use simple variable assignment
+      let new_value = self.gen_expr(var_type, true) // Use simple expressions to avoid complexity
       Assign(left_value, new_value)
     }
     None =>
-      // 变量不存在，生成let语句代替
+      // Variable doesn't exist, generate let statement instead
       self.gen_let_stmt()
   }
 }
 
-// 辅助函数：递归收集可变变量
+// Helper function: recursively collect mutable variables
 
-///|
+/// Recursively collect mutable variables
 fn RandProgGenerator::collect_mutable_vars_recursive(
   self : Self,
   env : Env[Ident, Type],
   result : Array[(Ident, Type)],
 ) -> Unit {
   env.map.each(fn(var_name, var_type) {
-    // 只添加在当前变量环境中确实存在的变量
+    // Only add variables that actually exist in current variable environment
     match self.var_env.get(var_name) {
       Some(_) => result.push((var_name, var_type))
       None => ()
@@ -1381,38 +1381,38 @@ fn RandProgGenerator::collect_mutable_vars_recursive(
   }
 }
 
-///|
+/// Generate while statement
 pub fn RandProgGenerator::gen_while_stmt(self : Self) -> Stmt {
-  // 生成一个带有确定终止条件的while循环
-  // 使用模式：let mut counter = 0; while counter < limit { ... counter = counter + 1 }
+  // Generate a while loop with definite termination condition
+  // Use pattern: let mut counter = 0; while counter < limit { ... counter = counter + 1 }
 
-  // 创建子环境
+  // Create sub-environment
   let old_var_env = self.var_env
   let old_mut_env = self.mutable_vars
   self.var_env = old_var_env.sub_env()
   self.mutable_vars = old_mut_env.sub_env()
 
-  // 生成循环计数器变量
+  // Generate loop counter variable
   let counter_name = self.gen_ident()
   let counter_type = Int
-  let initial_value = IfLevelExpr(ApplyExpr(ValueExpr(IntExpr(0)))) // 从0开始
+  let initial_value = IfLevelExpr(ApplyExpr(ValueExpr(IntExpr(0)))) // Start from 0
 
-  // 将计数器添加到环境中
+  // Add counter to environment
   self.var_env.set(counter_name, counter_type)
   self.mutable_vars.set(counter_name, counter_type)
 
-  // 生成循环限制
-  let limit = self.rand_int(10) + 1 // 1-10次循环
+  // Generate loop limit
+  let limit = self.rand_int(10) + 1 // 1-10 iterations
   let limit_expr = IfLevelExpr(ApplyExpr(ValueExpr(IntExpr(limit))))
 
-  // 生成条件：counter < limit
+  // Generate condition: counter < limit
   let counter_ref = IfLevelExpr(ApplyExpr(ValueExpr(IdentExpr(counter_name))))
   let cond = CmpExpr(Lt, counter_ref, limit_expr)
 
-  // 生成循环体，并在最后添加计数器递增
+  // Generate loop body and add counter increment at the end
   let body = self.gen_block_expr(Unit)
 
-  // 在循环体中添加计数器递增语句
+  // Add counter increment statement in loop body
   let increment_expr = AddExpr(
     IfLevelExpr(ApplyExpr(ValueExpr(IdentExpr(counter_name)))),
     IfLevelExpr(ApplyExpr(ValueExpr(IntExpr(1)))),
@@ -1420,102 +1420,102 @@ pub fn RandProgGenerator::gen_while_stmt(self : Self) -> Stmt {
   let increment_stmt = Assign(LeftValue::Ident(counter_name), increment_expr)
   body.push(increment_stmt)
 
-  // 恢复环境
+  // Restore environment
   self.var_env = old_var_env
   self.mutable_vars = old_mut_env
 
-  // 创建一个包含let mut和while的复合语句块
+  // Create a compound statement block containing let mut and while
   let wrapper_block = BlockExpr::new(nested_level=self.current_depth)
 
-  // 添加let mut语句
+  // Add let mut statement
   let let_mut_stmt = LetMut(counter_name, Some(counter_type), initial_value)
   wrapper_block.push(let_mut_stmt)
 
-  // 添加while语句
+  // Add while statement
   let while_stmt = While(cond, body)
   wrapper_block.push(while_stmt)
 
-  // 返回一个表达式语句包装这个块
+  // Return expression statement wrapping this block
   ExprStmt(IfLevelExpr(ApplyExpr(ValueExpr(BlockExpr(wrapper_block)))))
 }
 
-///|
+/// Generate return statement
 pub fn RandProgGenerator::gen_return_stmt(self : Self) -> Stmt {
   let return_expr = self.gen_expr(self.current_return_type, false)
   Return(return_expr)
 }
 
-///|
+/// Generate local function definition statement
 pub fn RandProgGenerator::gen_local_func_def_stmt(self : Self) -> Stmt {
-  // 减少局部函数的生成，因为它们容易引起作用域问题
+  // Reduce local function generation as they easily cause scope issues
   if self.current_depth >= self.max_depth - 2 {
-    return self.gen_let_stmt() // 在深层嵌套中不生成局部函数
+    return self.gen_let_stmt() // Don't generate local functions in deep nesting
   }
-  let param_count = self.rand_int(3) // 0-2个参数，减少复杂度
+  let param_count = self.rand_int(3) // 0-2 parameters, reduce complexity
   let params = Array::new()
 
-  // 生成函数名和类型
+  // Generate function name and type
   let func_name = self.gen_ident()
-  let ret_ty = self.gen_basic_type() // 使用基础类型确保安全
+  let ret_ty = self.gen_basic_type() // Use basic types to ensure safety
 
-  // 生成参数类型
+  // Generate parameter types
   let param_types = Array::new()
   for i = 0; i < param_count; i = i + 1 {
-    let param_type = self.gen_basic_type() // 使用基础类型确保安全
+    let param_type = self.gen_basic_type() // Use basic types to ensure safety
     param_types.push(param_type)
   }
 
-  // 将函数类型添加到当前环境中（在生成函数体之前）
+  // Add function type to current environment (before generating function body)
   let func_type = Type::Func(param_types, ret_ty)
   self.var_env.set(func_name, func_type)
 
-  // 创建完全独立的函数作用域，不继承外部变量
+  // Create completely independent function scope, don't inherit external variables
   let old_var_env = self.var_env
   let old_mut_env = self.mutable_vars
-  self.var_env = Env::new() // 全新的环境，不继承任何外部变量
+  self.var_env = Env::new() // Brand new environment, don't inherit any external variables
   self.mutable_vars = Env::new()
 
-  // 生成参数并添加到函数作用域
+  // Generate parameters and add to function scope
   for i = 0; i < param_count; i = i + 1 {
     let param_name = self.gen_ident()
     let param_type = param_types[i]
     params.push((param_name, Some(param_type)))
 
-    // 将参数添加到函数内部环境中
+    // Add parameters to function internal environment
     self.var_env.set(param_name, param_type)
-    // 记录参数为已定义变量
+    // Record parameters as defined variables
     self.record_var_definition(param_name, param_type)
-    // 参数被定义时即被使用
+    // Parameters are used when defined
     self.mark_var_used(param_name)
   }
 
-  // 生成函数体 - 使用变量跟踪
+  // Generate function body - use variable tracking
   let old_return_type = self.current_return_type
   self.current_return_type = ret_ty
   let body = self.gen_block_expr_with_usage_tracking(ret_ty)
 
-  // 恢复环境
+  // Restore environment
   self.current_return_type = old_return_type
   self.var_env = old_var_env
   self.mutable_vars = old_mut_env
   LocalFuncDef(func_name, params, Some(ret_ty), body)
 }
 
-///|
+/// Generate expression statement
 pub fn RandProgGenerator::gen_expr_stmt(self : Self) -> Stmt {
-  // 表达式语句应该只生成Unit类型或if/match表达式，避免需要let _ = 前缀的情况
+  // Expression statements should only generate Unit type or if/match expressions, avoid cases requiring let _ = prefix
   let expr = match self.rand_int(3) {
     0 =>
-      // 生成Unit表达式
+      // Generate Unit expression
       self.gen_expr(Unit, true)
     1 =>
-      // 生成if表达式（不需要let _ = 前缀）
+      // Generate if expression (doesn't need let _ = prefix)
       match self.gen_if_expr(Unit) {
         Some(expr) => expr
         None => self.gen_expr(Unit, true)
       }
     _ =>
-      // 生成match表达式（不需要let _ = 前缀）
+      // Generate match expression (doesn't need let _ = prefix)
       match self.gen_match_expr(Unit) {
         Some(expr) => expr
         None => self.gen_expr(Unit, true)
@@ -1524,15 +1524,15 @@ pub fn RandProgGenerator::gen_expr_stmt(self : Self) -> Stmt {
   ExprStmt(expr)
 }
 
-///| 生成对未使用类型的构造和使用语句
+/// Generate constructor and usage statements for unused types
 fn RandProgGenerator::gen_force_use_unused_types(
   self : Self,
   block : BlockExpr,
 ) -> Unit {
-  // 强制使用所有结构体类型
+  // Force use of all struct types
   self.struct_defs.each(fn(struct_name, struct_def) {
-    if true { // 使用所有结构体
-      // 生成结构体构造表达式并赋值给变量
+    if true { // Use all structs
+      // Generate struct constructor expression and assign to variable
       let var_name = self.gen_ident()
       let struct_expr = self.gen_struct_construct_expr(
         struct_name,
@@ -1541,7 +1541,7 @@ fn RandProgGenerator::gen_force_use_unused_types(
       let let_stmt = Let(var_name, Some(struct_def.type_of()), struct_expr)
       block.push(let_stmt)
 
-      // 访问所有结构体字段
+      // Access all struct fields
       for field in struct_def.fields {
         let (field_name, field_type) = field
         let field_access = IfLevelExpr(
@@ -1554,7 +1554,7 @@ fn RandProgGenerator::gen_force_use_unused_types(
         )
         match field_type {
           Int => {
-            // 为Int类型生成println调用
+            // Generate println call for Int type
             let println_call = IfLevelExpr(
               ApplyExpr(
                 Call(
@@ -1566,34 +1566,34 @@ fn RandProgGenerator::gen_force_use_unused_types(
             block.push(ExprStmt(println_call))
           }
           _ =>
-            // 为其他类型生成简单的表达式语句
+            // Generate simple expression statement for other types
             block.push(ExprStmt(field_access))
         }
       }
 
-      // 使用整个结构体
+      // Use entire struct
       let usage_expr = IfLevelExpr(ApplyExpr(ValueExpr(IdentExpr(var_name))))
       block.push(ExprStmt(usage_expr))
     }
   })
 
-  // 强制使用所有枚举类型，通过match表达式
+  // Force use of all enum types through match expressions
   self.enum_defs.each(fn(enum_name, enum_def) {
-    if true { // 使用所有枚举
-      // 生成枚举构造表达式并赋值给变量
+    if true { // Use all enums
+      // Generate enum constructor expression and assign to variable
       let var_name = self.gen_ident()
       let enum_expr = self.gen_enum_construct_expr(enum_name, enum_def.variants)
       let let_stmt = Let(var_name, Some(enum_def.type_of()), enum_expr)
       block.push(let_stmt)
 
-      // 生成match表达式使用所有变体
+      // Generate match expression using all variants
       if !enum_def.variants.is_empty() {
         let match_arms = Array::new()
         for variant in enum_def.variants {
           let (variant_name, variant_types) = variant
           let patterns = Array::new()
           for _ in variant_types {
-            patterns.push(Pattern::WildCard) // 使用通配符模式
+            patterns.push(Pattern::WildCard) // Use wildcard patterns
           }
           let pattern = Pattern::EnumPattern(
             Some(enum_name),
@@ -1613,16 +1613,16 @@ fn RandProgGenerator::gen_force_use_unused_types(
         block.push(match_stmt)
       }
 
-      // 使用整个枚举
+      // Use entire enum
       let usage_expr = IfLevelExpr(ApplyExpr(ValueExpr(IdentExpr(var_name))))
       block.push(ExprStmt(usage_expr))
     }
   })
 
-  // 强制调用所有函数
+  // Force call all functions
   self.func_defs.each(fn(func_name, func_def) {
-    if true { // 调用所有函数
-      // 生成函数调用
+    if true { // Call all functions
+      // Generate function call
       let args = Array::new()
       for param in func_def.params {
         let (_, param_type) = param
@@ -1634,15 +1634,15 @@ fn RandProgGenerator::gen_force_use_unused_types(
         ),
       )
       if func_def.ret_ty == Unit {
-        // Unit返回类型，直接作为表达式语句
+        // Unit return type, directly as expression statement
         block.push(ExprStmt(func_call))
       } else {
-        // 非Unit返回类型，赋值给变量然后使用
+        // Non-Unit return type, assign to variable then use
         let var_name = self.gen_ident()
         let let_stmt = Let(var_name, Some(func_def.ret_ty), func_call)
         block.push(let_stmt)
 
-        // 根据返回类型决定如何使用
+        // Decide how to use based on return type
         match func_def.ret_ty {
           Int => {
             let var_expr = IfLevelExpr(
@@ -1669,13 +1669,13 @@ fn RandProgGenerator::gen_force_use_unused_types(
     }
   })
 
-  // 强制使用所有顶层变量
+  // Force use all top-level variables
   self.var_env.map.each(fn(var_name, var_type) {
-    // 检查这个变量是否是在全局作用域（非函数参数）
-    if self.current_depth <= 1 { // 在main函数的顶层
+    // Check if this variable is in global scope (not function parameter)
+    if self.current_depth <= 1 { // At top level of main function
       match var_type {
         Int => {
-          // 为Int类型生成println调用
+          // Generate println call for Int type
           let var_expr = IfLevelExpr(ApplyExpr(ValueExpr(IdentExpr(var_name))))
           let println_call = IfLevelExpr(
             ApplyExpr(
@@ -1688,7 +1688,7 @@ fn RandProgGenerator::gen_force_use_unused_types(
           block.push(ExprStmt(println_call))
         }
         _ => {
-          // 为其他类型生成简单的表达式语句
+          // Generate simple expression statement for other types
           let var_expr = IfLevelExpr(ApplyExpr(ValueExpr(IdentExpr(var_name))))
           block.push(ExprStmt(var_expr))
         }
@@ -1697,33 +1697,33 @@ fn RandProgGenerator::gen_force_use_unused_types(
   })
 }
 
-///| 生成代码块并在结束时处理未使用变量
+/// Generate code block and handle unused variables at the end
 fn RandProgGenerator::gen_block_expr_with_usage_tracking(
   self : Self,
   return_type : Type,
 ) -> BlockExpr {
-  // 保存当前已定义变量状态
+  // Save current defined variables state
   let scope_start_vars = Map::new()
   self.all_defined_vars.each(fn(k, v) { scope_start_vars.set(k, v) })
 
-  // 生成正常的代码块
+  // Generate normal code block
   let block = self.gen_block_expr(return_type)
 
-  // 为当前作用域中定义但未使用的变量生成使用语句
+  // Generate usage statements for variables defined but unused in current scope
   self.all_defined_vars.each(fn(var_name, var_type) {
-    // 检查这个变量是否是在当前作用域中新定义的
+    // Check if this variable is newly defined in current scope
     match scope_start_vars.get(var_name) {
       None =>
-        // 这是一个新定义的变量，检查是否未使用
+        // This is a newly defined variable, check if unused
         match self.used_vars.get(var_name) {
           Some(false) =>
-            // 变量未使用，生成使用语句
+            // Variable unused, generate usage statement
             match self.var_env.get(var_name) {
               Some(_) => {
-                // 变量在当前环境中可见，生成使用语句
+                // Variable visible in current environment, generate usage statement
                 match var_type {
                   Int => {
-                    // 为Int类型生成println调用
+                    // Generate println call for Int type
                     let var_expr = IfLevelExpr(
                       ApplyExpr(ValueExpr(IdentExpr(var_name))),
                     )
@@ -1740,29 +1740,29 @@ fn RandProgGenerator::gen_block_expr_with_usage_tracking(
                     block.push(ExprStmt(println_call))
                   }
                   _ => {
-                    // 为其他类型生成简单的表达式语句
+                    // Generate simple expression statement for other types
                     let var_expr = IfLevelExpr(
                       ApplyExpr(ValueExpr(IdentExpr(var_name))),
                     )
                     block.push(ExprStmt(var_expr))
                   }
                 }
-                // 标记变量已使用
+                // Mark variable as used
                 self.mark_var_used(var_name)
               }
-              None => () // 变量不可见，跳过
+              None => () // Variable not visible, skip
             }
-          _ => () // 变量已使用或未定义，跳过
+          _ => () // Variable already used or undefined, skip
         }
-      Some(_) => () // 变量不是在当前作用域定义的，跳过
+      Some(_) => () // Variable not defined in current scope, skip
     }
   })
 
-  // 额外增强：对于任何在当前环境中可见但标记为未使用的变量，强制使用
+  // Additional enhancement: for any variable visible in current environment but marked as unused, force use
   self.var_env.map.each(fn(var_name, var_type) {
     match self.used_vars.get(var_name) {
       Some(false) => {
-        // 未使用的变量，强制生成使用语句
+        // Unused variable, force generate usage statement
         match var_type {
           Int => {
             let var_expr = IfLevelExpr(
@@ -1791,46 +1791,46 @@ fn RandProgGenerator::gen_block_expr_with_usage_tracking(
     }
   })
 
-  // 特别处理可变变量：确保所有可变变量的可变性都被使用
+  // Special handling for mutable variables: ensure all mutable variables' mutability is used
   self.mutable_vars.map.each(fn(var_name, var_type) {
     match self.var_env.get(var_name) {
       Some(_) => {
-        // 可变变量在当前环境中可见，生成多次赋值以使用其可变性
+        // Mutable variable visible in current environment, generate multiple assignments to use its mutability
         let left_value = LeftValue::Ident(var_name)
 
-        // 第一次赋值
-        let new_value1 = self.gen_expr(var_type, true) // 生成简单表达式
+        // First assignment
+        let new_value1 = self.gen_expr(var_type, true) // Generate simple expression
         block.push(Assign(left_value, new_value1))
 
-        // 第二次赋值，确保可变性被使用
-        let new_value2 = self.gen_expr(var_type, true) // 生成另一个简单表达式
+        // Second assignment, ensure mutability is used
+        let new_value2 = self.gen_expr(var_type, true) // Generate another simple expression
         block.push(Assign(left_value, new_value2))
         self.mark_mutable_var_used(var_name)
       }
-      None => () // 变量不在当前环境中可见，跳过
+      None => () // Variable not visible in current environment, skip
     }
   })
 
-  // 清空未使用列表
+  // Clear unused list
   self.unused_mutable_vars = Map::new()
 
-  // 在main函数中强制使用一些顶层定义
-  if self.current_depth <= 1 { // 只在顶层块中生成
+  // Force use some top-level definitions in main function
+  if self.current_depth <= 1 { // Only generate in top-level block
     self.gen_force_use_unused_types(block)
   }
   block
 }
 
-///| 增强的代码块生成器，支持更复杂的代码结构
+/// Enhanced code block generator supporting more complex code structures
 pub fn RandProgGenerator::gen_block_expr(
   self : Self,
   return_type : Type,
 ) -> BlockExpr {
   let block = BlockExpr::new(nested_level=self.current_depth)
 
-  // 检查递归深度，避免无限递归
+  // Check recursion depth to avoid infinite recursion
   if self.current_depth >= self.max_depth {
-    // 在最大深度时，只生成简单的返回表达式
+    // At max depth, only generate simple return expression
     if return_type != Unit {
       let last_expr = self.gen_literal_expr(return_type)
       block.set_last_expr(last_expr)
@@ -1838,7 +1838,7 @@ pub fn RandProgGenerator::gen_block_expr(
     return block
   }
 
-  // 创建子环境
+  // Create sub-environment
   let old_var_env = self.var_env
   let old_mut_env = self.mutable_vars
   let old_depth = self.current_depth
@@ -1846,60 +1846,60 @@ pub fn RandProgGenerator::gen_block_expr(
   self.mutable_vars = old_mut_env.sub_env()
   self.current_depth = self.current_depth + 1
 
-  // 根据目标行数动态调整语句数量
+  // Dynamically adjust statement count based on target line count
   let base_stmt_count = if self.current_lines < self.total_lines_target / 2 {
-    // 如果当前行数少于目标的一半，生成更多语句
-    self.rand_int(25) + 15 // 15-39个语句
+    // If current lines less than half of target, generate more statements
+    self.rand_int(25) + 15 // 15-39 statements
   } else if self.current_lines < self.total_lines_target * 3 / 4 {
-    // 如果接近目标，适中数量
-    self.rand_int(15) + 10 // 10-24个语句
+    // If approaching target, moderate amount
+    self.rand_int(15) + 10 // 10-24 statements
   } else {
-    // 如果接近或超过目标，较少语句
-    self.rand_int(8) + 5 // 5-12个语句
+    // If approaching or exceeding target, fewer statements
+    self.rand_int(8) + 5 // 5-12 statements
   }
   let stmt_count = if self.current_depth <= 2 {
     base_stmt_count
   } else {
-    base_stmt_count / (self.current_depth - 1) // 深度越大，语句越少
+    base_stmt_count / (self.current_depth - 1) // Greater depth, fewer statements
   }
   for i = 0; i < stmt_count; i = i + 1 {
     let stmt = self.gen_stmt()
     block.push(stmt)
     self.current_lines = self.current_lines + self.estimate_stmt_lines(stmt)
 
-    // 如果已经达到目标行数，停止生成更多语句
+    // If target line count reached, stop generating more statements
     if self.current_lines >= self.total_lines_target {
       break
     }
   }
 
-  // 在函数结束前，为所有未使用的可变变量生成强制赋值
-  // 但只有在当前环境中确实存在这些变量时才这样做
+  // Before function ends, generate forced assignments for all unused mutable variables
+  // But only do this when these variables actually exist in current environment
   let force_assignments = self.gen_safe_force_assign_unused_mutables()
   for assign_stmt in force_assignments {
     block.push(assign_stmt)
     self.current_lines = self.current_lines + 1
   }
 
-  // 生成返回表达式（如果需要）
+  // Generate return expression (if needed)
   if return_type != Unit {
     let last_expr = if self.rand_bool() == true {
-      self.gen_literal_expr(return_type) // 有时生成字面量
+      self.gen_literal_expr(return_type) // Sometimes generate literals
     } else {
-      self.gen_expr(return_type, false) // 有时生成复杂表达式
+      self.gen_expr(return_type, false) // Sometimes generate complex expressions
     }
     block.set_last_expr(last_expr)
     self.current_lines = self.current_lines + 1
   }
 
-  // 恢复环境
+  // Restore environment
   self.var_env = old_var_env
   self.mutable_vars = old_mut_env
   self.current_depth = old_depth
   block
 }
 
-///| 估算语句的行数（用于控制总行数）
+/// Estimate statement line count (for controlling total line count)
 fn RandProgGenerator::estimate_stmt_lines(self : Self, stmt : Stmt) -> Int {
   match stmt {
     Let(_, _, _) => 1
@@ -1914,9 +1914,9 @@ fn RandProgGenerator::estimate_stmt_lines(self : Self, stmt : Stmt) -> Int {
   }
 }
 
-///| 估算代码块的行数
+/// Estimate code block line count
 fn RandProgGenerator::estimate_block_lines(self : Self, block : BlockExpr) -> Int {
-  let lines = 2 // { 和 }
+  let lines = 2 // { and }
   let stmt_lines = block.stmts.fold(init=0, fn(acc, stmt) {
     acc + self.estimate_stmt_lines(stmt)
   })
@@ -1927,32 +1927,32 @@ fn RandProgGenerator::estimate_block_lines(self : Self, block : BlockExpr) -> In
   lines + stmt_lines + expr_lines
 }
 
-///| 增强的顶层定义生成器
+/// Enhanced top-level definition generator
 pub fn RandProgGenerator::gen_top_let(self : Self) -> TopLet {
   let name = self.gen_ident()
   let ty = self.gen_type(true)
   let value = self.gen_expr(ty, false)
 
-  // 将全局变量添加到环境中
+  // Add global variable to environment
   self.var_env.set(name, ty)
 
-  // 总是生成类型注解以确保类型安全
+  // Always generate type annotation to ensure type safety
   let type_annotation = Some(ty)
   { name, ty: type_annotation, value }
 }
 
-///|
+/// Generate struct definition
 pub fn RandProgGenerator::gen_struct_def(self : Self) -> StructDef {
   let name = self.gen_upper()
-  let field_count = self.rand_int(5) + 1 // 1-5个字段，减少复杂度
+  let field_count = self.rand_int(5) + 1 // 1-5 fields, reduce complexity
   let fields = Array::new()
   for i = 0; i < field_count; i = i + 1 {
     let field_name = self.gen_ident()
-    // 对于结构体字段，主要使用基础类型或简单的复合类型
+    // For struct fields, mainly use basic types or simple composite types
     let field_type = if self.rand_int(10) < 7 {
-      self.gen_basic_type() // 70%概率使用基础类型
+      self.gen_basic_type() // 70% probability use basic types
     } else {
-      // 30%概率使用简单的复合类型
+      // 30% probability use simple composite types
       match self.rand_int(2) {
         0 => Array(self.gen_basic_type())
         _ => {
@@ -1969,29 +1969,29 @@ pub fn RandProgGenerator::gen_struct_def(self : Self) -> StructDef {
   }
   let struct_def = { generic_param: None, name, fields }
 
-  // 注册结构体定义
+  // Register struct definition
   self.struct_defs.set(name, struct_def)
 
-  // 将结构体类型添加到类型环境
+  // Add struct type to type environment
   self.type_env.set(name, struct_def.type_of())
   struct_def
 }
 
-///|
+/// Generate enum definition
 pub fn RandProgGenerator::gen_enum_def(self : Self) -> EnumDef {
   let name = self.gen_upper()
-  let variant_count = self.rand_int(4) + 1 // 1-4个变体，减少复杂度
+  let variant_count = self.rand_int(4) + 1 // 1-4 variants, reduce complexity
   let variants = Array::new()
   for i = 0; i < variant_count; i = i + 1 {
     let variant_name = self.gen_upper()
-    let field_count = self.rand_int(4) // 0-3个字段，减少复杂度
+    let field_count = self.rand_int(4) // 0-3 fields, reduce complexity
     let variant_fields = Array::new()
     for j = 0; j < field_count; j = j + 1 {
-      // 对于枚举变体，主要使用基础类型
+      // For enum variants, mainly use basic types
       let field_type = if self.rand_int(10) < 8 {
-        self.gen_basic_type() // 80%概率使用基础类型
+        self.gen_basic_type() // 80% probability use basic types
       } else {
-        Array(self.gen_basic_type()) // 20%概率使用基础类型的数组
+        Array(self.gen_basic_type()) // 20% probability use basic type arrays
       }
       variant_fields.push(field_type)
     }
@@ -1999,66 +1999,66 @@ pub fn RandProgGenerator::gen_enum_def(self : Self) -> EnumDef {
   }
   let enum_def = { generic_param: None, name, variants }
 
-  // 注册枚举定义
+  // Register enum definition
   self.enum_defs.set(name, enum_def)
 
-  // 将枚举类型添加到类型环境
+  // Add enum type to type environment
   self.type_env.set(name, enum_def.type_of())
   enum_def
 }
 
-///|
+/// Generate top-level function definition
 pub fn RandProgGenerator::gen_top_func_def(self : Self) -> TopFuncDef {
   let name = self.gen_ident()
   let param_count = self.rand_int(self.max_func_params)
   let params = Array::new()
 
-  // 创建新的环境作用域
+  // Create new environment scope
   let old_var_env = self.var_env
   let old_mut_env = self.mutable_vars
   self.var_env = old_var_env.sub_env()
   self.mutable_vars = old_mut_env.sub_env()
 
-  // 生成参数，使用基础类型确保类型安全
+  // Generate parameters, use basic types to ensure type safety
   for i = 0; i < param_count; i = i + 1 {
     let param_name = self.gen_ident()
-    let param_type = self.gen_basic_type() // 使用基础类型确保安全
+    let param_type = self.gen_basic_type() // Use basic types to ensure safety
     params.push((param_name, param_type))
 
-    // 将参数添加到环境中
+    // Add parameters to environment
     self.var_env.set(param_name, param_type)
-    // 记录参数为已定义变量
+    // Record parameters as defined variables
     self.record_var_definition(param_name, param_type)
-    // 参数被定义时即被使用
+    // Parameters are used when defined
     self.mark_var_used(param_name)
   }
 
-  // 生成返回类型和函数体
-  let ret_ty = self.gen_basic_type() // 使用基础类型确保安全
+  // Generate return type and function body
+  let ret_ty = self.gen_basic_type() // Use basic types to ensure safety
   let old_return_type = self.current_return_type
   self.current_return_type = ret_ty
 
-  // 使用变量跟踪的代码块生成
+  // Use variable tracking code block generation
   let body = self.gen_block_expr_with_usage_tracking(ret_ty)
 
-  // 恢复环境和返回类型
+  // Restore environment and return type
   self.current_return_type = old_return_type
   self.var_env = old_var_env
   self.mutable_vars = old_mut_env
   let func_def = { generic_param: None, name, params, ret_ty, body }
 
-  // 注册函数定义
+  // Register function definition
   self.func_defs.set(name, func_def)
   func_def
 }
 
-///| 生成main函数（不带参数和泛型参数）
+/// Generate main function (without parameters and generic parameters)
 pub fn RandProgGenerator::gen_main_func(self : Self) -> TopFuncDef {
   let name : Ident = Ident("main")
-  let params : Array[(Ident, Type)] = [] // main函数没有参数
-  let ret_ty = Unit // main函数返回Unit
+  let params : Array[(Ident, Type)] = [] // main function has no parameters
+  let ret_ty = Unit // main function returns Unit
 
-  // 创建新的环境作用域
+  // Create new environment scope
   let old_var_env = self.var_env
   let old_mut_env = self.mutable_vars
   self.var_env = old_var_env.sub_env()
@@ -2066,24 +2066,24 @@ pub fn RandProgGenerator::gen_main_func(self : Self) -> TopFuncDef {
   let old_return_type = self.current_return_type
   self.current_return_type = Unit
 
-  // 生成一个较大的函数体，包含更多语句
+  // Generate a larger function body with more statements
   let body = self.gen_block_expr_with_usage_tracking(Unit)
 
-  // 恢复环境和返回类型
+  // Restore environment and return type
   self.current_return_type = old_return_type
   self.var_env = old_var_env
   self.mutable_vars = old_mut_env
   { generic_param: None, name, params, ret_ty, body }
 }
 
-///|
+/// Generate top-level declaration
 pub fn RandProgGenerator::gen_top_decl(self : Self) -> TopDecl {
   let choices = [
-    (0, 30), // 顶层let
-    (1, 25), // 结构体定义  
-    (2, 25), // 函数定义
+    (0, 30), // Top-level let
+    (1, 25), // Struct definition  
+    (2, 25), // Function definition
     (3, 20),
-  ] // 枚举定义
+  ] // Enum definition
   match self.weighted_choice(choices) {
     Some(0) => TopDecl::TopLet(self.gen_top_let())
     Some(1) => TopDecl::StructDef(self.gen_struct_def())
@@ -2093,29 +2093,29 @@ pub fn RandProgGenerator::gen_top_decl(self : Self) -> TopDecl {
   }
 }
 
-///| 程序生成器，确保包含main函数并生成合理长度的程序
+/// Program generator ensuring main function inclusion and reasonable program length
 pub fn RandProgGenerator::gen_program(self : Self) -> Program {
   let top_decls = Array::new()
 
-  // 首先生成适量基础类型定义
-  let struct_count = self.rand_int(5) + 3 // 3-7个结构体
+  // First generate appropriate amount of basic type definitions
+  let struct_count = self.rand_int(5) + 3 // 3-7 structs
   for i = 0; i < struct_count; i = i + 1 {
     top_decls.push(TopDecl::StructDef(self.gen_struct_def()))
     self.current_lines = self.current_lines + 5
   }
-  let enum_count = self.rand_int(4) + 2 // 2-5个枚举
+  let enum_count = self.rand_int(4) + 2 // 2-5 enums
   for i = 0; i < enum_count; i = i + 1 {
     top_decls.push(TopDecl::EnumDef(self.gen_enum_def()))
     self.current_lines = self.current_lines + 6
   }
 
-  // 生成适量函数和顶层变量
-  let decl_count = self.rand_int(40) + 40 // 40-79个声明
+  // Generate appropriate amount of functions and top-level variables
+  let decl_count = self.rand_int(40) + 40 // 40-79 declarations
   for i = 0; i < decl_count; i = i + 1 {
     let decl = self.gen_top_decl()
     top_decls.push(decl)
 
-    // 估算行数
+    // Estimate line count
     match decl {
       TopDecl::TopLet(_) => self.current_lines = self.current_lines + 1
       TopDecl::TopFuncDef(func_def) =>
@@ -2127,7 +2127,7 @@ pub fn RandProgGenerator::gen_program(self : Self) -> Program {
     }
   }
 
-  // 最后生成main函数（必须的）
+  // Finally generate main function (required)
   let main_func = self.gen_main_func()
   top_decls.push(TopDecl::TopFuncDef(main_func))
   self.current_lines = self.current_lines +
