@@ -142,7 +142,6 @@ pub struct RandProgGenerator {
   total_lines_target : Int
   mut var_env : Env[Ident, Type]
   mut mutable_vars : Env[Ident, Type]
-  mut unused_mutable_vars : Map[Ident, Type]
   type_env : Env[Upper, Type]
   mut all_defined_vars : Map[Ident, Type]
   mut used_vars : Map[Ident, Bool]

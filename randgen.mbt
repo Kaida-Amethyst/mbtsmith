@@ -62,7 +62,6 @@ pub struct RandProgGenerator {
   // Environment tracking
   mut var_env : Env[Ident, Type] // Variable type environment
   mut mutable_vars : Env[Ident, Type] // Mutable variable environment
-  mut unused_mutable_vars : Map[Ident, Type] // Unused mutable variables (require forced assignment)
   type_env : Env[Upper, Type] // Custom type environment
 
   // Track all defined variables and their usage
@@ -87,7 +86,7 @@ pub struct RandProgGenerator {
 }
 
 /// Create new random program generator
-pub fn RandProgGenerator::new(seed~ : Int = 0) -> RandProgGenerator {
+pub fn RandProgGenerator::new(seed~ : Int? = None) -> RandProgGenerator {
   let g = RandProgGenerator::{
     rand: @random.Rand::new(),
     max_depth: 4, // Reduce max depth to avoid stack overflow
@@ -99,7 +98,6 @@ pub fn RandProgGenerator::new(seed~ : Int = 0) -> RandProgGenerator {
     total_lines_target: 2000, // Target line count
     var_env: Env::new(),
     mutable_vars: Env::new(),
-    unused_mutable_vars: Map::new(),
     type_env: Env::new(),
     all_defined_vars: Map::new(),
     used_vars: Map::new(),
@@ -112,9 +110,13 @@ pub fn RandProgGenerator::new(seed~ : Int = 0) -> RandProgGenerator {
     current_nested_level: 0,
     current_lines: 0,
   }
+  let seed =  if seed is Some(s) {
+    s
+  } else {
+    (@env.now() % 100).to_int()
+  }
   for i in 0..<seed {
     let _ = g.rand_int(100)
-
   }
   g
 }
@@ -293,20 +295,7 @@ fn RandProgGenerator::find_all_vars_of_type(
   self.var_env.collect_vars_of_type(target_type)
 }
 
-/// Mark mutable variable as used (remove from unused list)
-fn RandProgGenerator::mark_mutable_var_used(
-  self : Self,
-  var_name : Ident,
-) -> Unit {
-  // Create new Map to replace removal operation
-  let new_map = Map::new()
-  self.unused_mutable_vars.each(fn(name, ty) {
-    if name != var_name {
-      new_map.set(name, ty)
-    }
-  })
-  self.unused_mutable_vars = new_map
-}
+// Removed: mark_mutable_var_used - no longer needed with immediate assignment approach
 
 /// Record variable definition
 fn RandProgGenerator::record_var_definition(
@@ -338,27 +327,7 @@ fn RandProgGenerator::mark_var_used(self : Self, var_name : Ident) -> Unit {
   }
 }
 
-/// Safely generate forced assignment statements for unused mutable variables
-fn RandProgGenerator::gen_safe_force_assign_unused_mutables(
-  self : Self,
-) -> Array[Stmt] {
-  let assignments = Array::new()
-  self.unused_mutable_vars.each(fn(var_name, var_type) {
-    // Only generate assignment if variable is actually visible in current environment
-    match self.var_env.get(var_name) {
-      Some(_) => {
-        let new_value = self.gen_expr(var_type, true)
-        let assign_stmt = Assign(LeftValue::Ident(var_name), new_value)
-        assignments.push(assign_stmt)
-      }
-      None => () // Variable not visible, skip
-    }
-  })
-
-  // Clear unused list
-  self.unused_mutable_vars = Map::new()
-  assignments
-}
+// This function has been moved into gen_block_expr_with_usage_tracking
 
 /// Generate complex literal expressions
 fn RandProgGenerator::gen_literal_expr(self : Self, ty : Type) -> Expr {
@@ -440,12 +409,6 @@ fn RandProgGenerator::gen_var_expr(self : Self, ty : Type) -> Expr? {
         Some(_) => {
           // Mark variable as used
           self.mark_var_used(v)
-
-          // If mutable variable, mark as used
-          match self.unused_mutable_vars.get(v) {
-            Some(_) => self.mark_mutable_var_used(v)
-            None => ()
-          }
           Some(IfLevelExpr(ApplyExpr(ValueExpr(IdentExpr(v)))))
         }
         None => None
@@ -1269,7 +1232,7 @@ pub fn RandProgGenerator::gen_let_stmt(self : Self) -> Stmt {
   Let(var_name, type_annotation, init_expr)
 }
 
-/// Generate let mut statement
+/// Generate let mut statement with immediate assignment to ensure mutability is used
 pub fn RandProgGenerator::gen_let_mut_stmt(self : Self) -> Stmt {
   let var_name = self.gen_ident()
   let var_type = self.gen_type(true)
@@ -1282,15 +1245,17 @@ pub fn RandProgGenerator::gen_let_mut_stmt(self : Self) -> Stmt {
   // Record variable definition
   self.record_var_definition(var_name, var_type)
 
-  // Add variable to unused mutable variables list
-  self.unused_mutable_vars.set(var_name, var_type)
   let type_annotation = if self.rand_int(10) < 7 {
     Some(var_type)
   } else {
     None
   }
+  
+  // Generate the let mut statement, which will be followed by an assignment
   LetMut(var_name, type_annotation, init_expr)
 }
+
+// Removed: gen_let_mut_with_assignment - functionality moved to gen_block_expr
 
 /// Generate tuple destructuring let statement
 pub fn RandProgGenerator::gen_let_tuple_stmt(self : Self) -> Stmt {
@@ -1347,8 +1312,7 @@ pub fn RandProgGenerator::gen_assign_stmt(self : Self) -> Stmt {
   match self.var_env.get(var_name) {
     Some(_) => {
       // Variable actually exists, can safely assign
-      self.mark_mutable_var_used(var_name)
-
+      
       // Generate appropriate left value based on variable type, but ensure simplicity to avoid complex access patterns
       let left_value = LeftValue::Ident(var_name) // Always use simple variable assignment
       let new_value = self.gen_expr(var_type, true) // Use simple expressions to avoid complexity
@@ -1410,7 +1374,7 @@ pub fn RandProgGenerator::gen_while_stmt(self : Self) -> Stmt {
   let cond = CmpExpr(Lt, counter_ref, limit_expr)
 
   // Generate loop body and add counter increment at the end
-  let body = self.gen_block_expr(Unit)
+  let body = self.gen_block_expr_with_usage_tracking(Unit)
 
   // Add counter increment statement in loop body
   let increment_expr = AddExpr(
@@ -1791,28 +1755,7 @@ fn RandProgGenerator::gen_block_expr_with_usage_tracking(
     }
   })
 
-  // Special handling for mutable variables: ensure all mutable variables' mutability is used
-  self.mutable_vars.map.each(fn(var_name, var_type) {
-    match self.var_env.get(var_name) {
-      Some(_) => {
-        // Mutable variable visible in current environment, generate multiple assignments to use its mutability
-        let left_value = LeftValue::Ident(var_name)
-
-        // First assignment
-        let new_value1 = self.gen_expr(var_type, true) // Generate simple expression
-        block.push(Assign(left_value, new_value1))
-
-        // Second assignment, ensure mutability is used
-        let new_value2 = self.gen_expr(var_type, true) // Generate another simple expression
-        block.push(Assign(left_value, new_value2))
-        self.mark_mutable_var_used(var_name)
-      }
-      None => () // Variable not visible in current environment, skip
-    }
-  })
-
-  // Clear unused list
-  self.unused_mutable_vars = Map::new()
+  // Note: mutable variables now get immediate assignments in gen_block_expr
 
   // Force use some top-level definitions in main function
   if self.current_depth <= 1 { // Only generate in top-level block
@@ -1866,6 +1809,23 @@ pub fn RandProgGenerator::gen_block_expr(
     let stmt = self.gen_stmt()
     block.push(stmt)
     self.current_lines = self.current_lines + self.estimate_stmt_lines(stmt)
+    
+    // If we just generated a let mut statement, immediately generate an assignment for it
+    match stmt {
+      LetMut(var_name, _, _) => {
+        // Get the variable type from var_env
+        match self.var_env.get(var_name) {
+          Some(var_type) => {
+            let assign_value = self.gen_expr(var_type, true)
+            let assign_stmt = Assign(LeftValue::Ident(var_name), assign_value)
+            block.push(assign_stmt)
+            self.current_lines = self.current_lines + 1
+          }
+          None => () // Should not happen, but skip if it does
+        }
+      }
+      _ => () // Not a let mut statement, do nothing
+    }
 
     // If target line count reached, stop generating more statements
     if self.current_lines >= self.total_lines_target {
@@ -1873,13 +1833,8 @@ pub fn RandProgGenerator::gen_block_expr(
     }
   }
 
-  // Before function ends, generate forced assignments for all unused mutable variables
-  // But only do this when these variables actually exist in current environment
-  let force_assignments = self.gen_safe_force_assign_unused_mutables()
-  for assign_stmt in force_assignments {
-    block.push(assign_stmt)
-    self.current_lines = self.current_lines + 1
-  }
+  // Note: forced assignments for unused mutable variables are handled 
+  // in gen_block_expr_with_usage_tracking when that function is used
 
   // Generate return expression (if needed)
   if return_type != Unit {
