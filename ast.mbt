@@ -1,11 +1,9 @@
-typealias @Either.Either
-
 ///|
 pub(all) type Upper String derive(Hash, Eq)
 
 ///|
 pub impl Show for Upper with output(self, logger) {
-  logger.write_string(self.inner());
+  logger.write_string(self.inner())
 }
 
 ///|
@@ -13,7 +11,7 @@ pub(all) type Ident String derive(Hash, Eq)
 
 ///|
 pub impl Show for Ident with output(self, logger) {
-  logger.write_string(self.inner());
+  logger.write_string(self.inner())
 }
 
 ///| Show for Type
@@ -42,31 +40,32 @@ pub(all) enum Type {
   // User-defined type, e.g. Point
   Struct(Upper, Array[(Ident, Type)])
   Enum(Upper, Array[(Upper, Array[Type])]) // e.g. Color::Red(Int, Int, Int)
-  GenericDef(Upper)  // T
+  GenericDef(Upper) // T
   GenericSub(Upper, Type) // Complex[Int]
 } derive(Eq)
 
+///|
 pub impl Show for Type with output(self, logger) {
   let s = match self {
-    Unit => "Unit";
-    Bool => "Bool";
-    Int => "Int";
-    Double => "Double";
-    Array(inner) => "Array[\{inner}]";
+    Unit => "Unit"
+    Bool => "Bool"
+    Int => "Int"
+    Double => "Double"
+    Array(inner) => "Array[\{inner}]"
     Tuple(inner) => {
-      let inner_str = inner.map(t => t.to_string()).join(", ");
+      let inner_str = inner.map(t => t.to_string()).join(", ")
       "(\{inner_str})"
     }
     Func(args, ret) => {
-      let args_str = args.map(t => t.to_string()).join(", ");
+      let args_str = args.map(t => t.to_string()).join(", ")
       "(\{args_str}) -> \{ret}"
     }
-    Struct(name, _) => "\{name}";
-    Enum(name, _) => "\{name}";
-    GenericDef(name) => "\{name}";
-    GenericSub(name, inner) => "\{name}[\{inner}]";
+    Struct(name, _) => "\{name}"
+    Enum(name, _) => "\{name}"
+    GenericDef(name) => "\{name}"
+    GenericSub(name, inner) => "\{name}[\{inner}]"
   }
-  logger.write_string(s);
+  logger.write_string(s)
 }
 
 ///| ValueExpr is primary expressions that can be evaluated to a value.
@@ -98,52 +97,53 @@ pub(all) enum ValueExpr {
   NotExpr(Expr) // !x
 }
 
+///|
 pub impl Show for ValueExpr with output(self, logger) {
   let s = match self {
-    ArrayMake(size, init) => "Array::make(\{size}, \{init})";
+    ArrayMake(size, init) => "Array::make(\{size}, \{init})"
     StructConstruct(name, fields) => {
-      let fields_str = fields.map(f => "\{f.0}: \{f.1}").join(", ");
+      let fields_str = fields.map(f => "\{f.0}: \{f.1}").join(", ")
       "\{name}::{\{fields_str}}"
     }
     EnumConstruct(enum_name, tag, fields) => {
       let fields_str = if fields.is_empty() {
         ""
       } else {
-        let s = fields.map(f => f.to_string()).join(", ");
+        let s = fields.map(f => f.to_string()).join(", ")
         "(\{s})"
       }
       let prefix = match enum_name {
-        Some(prefix) => "\{prefix}::";
-        None => "";
+        Some(prefix) => "\{prefix}::"
+        None => ""
       }
       "\{prefix}\{tag}\{fields_str}"
     }
-    UnitExpr => "()";
-    GroupExpr(expr) => "(\{expr})";
+    UnitExpr => "()"
+    GroupExpr(expr) => "(\{expr})"
     TupleExpr(exprs) => {
-      let exprs_str = exprs.map(e => e.to_string()).join(", ");
+      let exprs_str = exprs.map(e => e.to_string()).join(", ")
       "(\{exprs_str})"
     }
     ArrayExpr(exprs) => {
-      let exprs_str = exprs.map(e => e.to_string()).join(", ");
+      let exprs_str = exprs.map(e => e.to_string()).join(", ")
       "[\{exprs_str}]"
     }
-    BoolExpr(value) => if value { "true" } else { "false" };
-    IdentExpr(ident) => ident.to_string();
-    BlockExpr(b) => b.to_string();
-    NegExpr(expr) => "-\{expr}";
-    FloatExpr(value) => { 
-      let s = value.to_string();
+    BoolExpr(value) => if value { "true" } else { "false" }
+    IdentExpr(ident) => ident.to_string()
+    BlockExpr(b) => b.to_string()
+    NegExpr(expr) => "-\{expr}"
+    FloatExpr(value) => {
+      let s = value.to_string()
       if s.contains_char('.') {
-        s; // e.g. "1.0"
-      } else {
-        s + ".0"; // e.g. "1" -> "1.0"
+        s
+      } else { // e.g. "1.0"
+        s + ".0"
       }
-    }
-    IntExpr(value) => value.to_string();
-    NotExpr(expr) => "!\{expr}";
+    } // e.g. "1" -> "1.0"
+    IntExpr(value) => value.to_string()
+    NotExpr(expr) => "!\{expr}"
   }
-  logger.write_string(s);
+  logger.write_string(s)
 }
 
 ///| ApplyExpr is used to represent function application, array access, and dot access.
@@ -186,22 +186,20 @@ pub(all) enum ApplyExpr {
   Call(ApplyExpr, Array[Expr]) // x(y1, y2, ...)
 }
 
+///|
 pub impl Show for ApplyExpr with output(self, logger) {
   match self {
-    ValueExpr(value_expr) => logger.write_string(value_expr.to_string());
-    ArrAcc(left, index) => {
-      logger.write_string("\{left}[\{index}]");
-    }
-    DotAcc(left, ident) => {
-      logger.write_string("\{left}.\{ident}");
-    }
+    ValueExpr(value_expr) => logger.write_string(value_expr.to_string())
+    ArrAcc(left, index) => logger.write_string("\{left}[\{index}]")
+    DotAcc(left, ident) => logger.write_string("\{left}.\{ident}")
     Call(func, args) => {
-      let args_str = args.map(arg => arg.to_string()).join(", ");
-      logger.write_string("\{func}(\{args_str})");
+      let args_str = args.map(arg => arg.to_string()).join(", ")
+      logger.write_string("\{func}(\{args_str})")
     }
   }
 }
 
+///|
 pub(all) enum CmpOp {
   Eq
   Ne
@@ -211,16 +209,17 @@ pub(all) enum CmpOp {
   Ge
 }
 
+///|
 pub impl Show for CmpOp with output(self, logger) {
   let s = match self {
-    Eq => "==";
-    Ne => "!=";
-    Lt => "<";
-    Le => "<=";
-    Gt => ">";
-    Ge => ">=";
+    Eq => "=="
+    Ne => "!="
+    Lt => "<"
+    Le => "<="
+    Gt => ">"
+    Ge => ">="
   }
-  logger.write_string(s);
+  logger.write_string(s)
 }
 
 ///| Expr is the main expression type that can be used in the AST.
@@ -293,19 +292,20 @@ pub(all) enum Expr {
   IfLevelExpr(IfLevelExpr)
 }
 
+///|
 pub impl Show for Expr with output(self, logger) {
   let s = match self {
-    AndExpr(left, right) => "\{left} && \{right}";
-    OrExpr(left, right) => "\{left} || \{right}";
-    CmpExpr(op, left, right) => "\{left} \{op} \{right}";
-    AddExpr(left, right) => "\{left} + \{right}";
-    SubExpr(left, right) => "\{left} - \{right}";
-    MulExpr(left, right) => "\{left} * \{right}";
-    DivExpr(left, right) => "\{left} / \{right}";
-    ModExpr(left, right) => "\{left} % \{right}";
-    IfLevelExpr(if_level_expr) => if_level_expr.to_string();
+    AndExpr(left, right) => "\{left} && \{right}"
+    OrExpr(left, right) => "\{left} || \{right}"
+    CmpExpr(op, left, right) => "\{left} \{op} \{right}"
+    AddExpr(left, right) => "\{left} + \{right}"
+    SubExpr(left, right) => "\{left} - \{right}"
+    MulExpr(left, right) => "\{left} * \{right}"
+    DivExpr(left, right) => "\{left} / \{right}"
+    ModExpr(left, right) => "\{left} % \{right}"
+    IfLevelExpr(if_level_expr) => if_level_expr.to_string()
   }
-  logger.write_string(s);
+  logger.write_string(s)
 }
 
 ///| IfLevelExpr represents expressions that have the same precedence as if expressions.
@@ -333,11 +333,12 @@ pub(all) enum IfLevelExpr {
   MatchExpr(MatchExpr)
 }
 
+///|
 pub impl Show for IfLevelExpr with output(self, logger) {
   match self {
-    ApplyExpr(apply_expr) => logger.write_string(apply_expr.to_string());
-    IfExpr(if_expr) => logger.write_string(if_expr.to_string());
-    MatchExpr(match_expr) => logger.write_string(match_expr.to_string());
+    ApplyExpr(apply_expr) => logger.write_string(apply_expr.to_string())
+    IfExpr(if_expr) => logger.write_string(if_expr.to_string())
+    MatchExpr(match_expr) => logger.write_string(match_expr.to_string())
   }
 }
 
@@ -373,22 +374,23 @@ pub impl Show for IfLevelExpr with output(self, logger) {
 /// inspect(if_expr, content=expect)
 /// ```
 pub(all) struct IfExpr {
-  cond: Expr
-  then_: BlockExpr
-  else_: Either[IfExpr, BlockExpr]
+  cond : Expr
+  then_ : BlockExpr
+  else_ : Either[IfExpr, BlockExpr]
 }
 
+///|
 pub impl Show for IfExpr with output(self, logger) {
-  logger.write_string("if \{self.cond} ");
-  logger.write_string(self.then_.to_string());
+  logger.write_string("if \{self.cond} ")
+  logger.write_string(self.then_.to_string())
   match self.else_ {
     Left(if_expr) => {
-      logger.write_string(" else ");
-      logger.write_string(if_expr.to_string());
+      logger.write_string(" else ")
+      logger.write_string(if_expr.to_string())
     }
     Right(block) => {
-      logger.write_string(" else ");
-      logger.write_string(block.to_string());
+      logger.write_string(" else ")
+      logger.write_string(block.to_string())
     }
   }
 }
@@ -444,46 +446,49 @@ pub impl Show for IfExpr with output(self, logger) {
 /// inspect(empty_block, content="{\n}")
 /// ```
 pub struct BlockExpr {
-  nested_level: Int // for print indentation
-  stmts: Array[Stmt]
-  mut last_expr: Expr?
-  parent: BlockExpr?
+  nested_level : Int // for print indentation
+  stmts : Array[Stmt]
+  mut last_expr : Expr?
+  parent : BlockExpr?
 }
 
-pub fn BlockExpr::new(nested_level~:Int = 0, parent~: BlockExpr?=None, last_expr~: Expr? = None) -> BlockExpr {
-  BlockExpr::{
-    nested_level,
-    stmts: [],
-    last_expr,
-    parent
-  }
+///|
+pub fn BlockExpr::new(
+  nested_level~ : Int = 0,
+  parent~ : BlockExpr? = None,
+  last_expr~ : Expr? = None,
+) -> BlockExpr {
+  BlockExpr::{ nested_level, stmts: [], last_expr, parent }
 }
 
-pub fn BlockExpr::set_last_expr(self: Self, expr: Expr) -> Unit {
-  self.last_expr = Some(expr);
+///|
+pub fn BlockExpr::set_last_expr(self : Self, expr : Expr) -> Unit {
+  self.last_expr = Some(expr)
 }
 
-pub fn BlockExpr::push(self: Self, stmt: Stmt) -> Unit {
-  self.stmts.push(stmt);
+///|
+pub fn BlockExpr::push(self : Self, stmt : Stmt) -> Unit {
+  self.stmts.push(stmt)
 }
 
+///|
 pub impl Show for BlockExpr with output(self, logger) {
   // no ident before the first LBrace
-  logger.write_string("{\n");
-  let indent = "  ".repeat(self.nested_level + 1);
+  logger.write_string("{\n")
+  let indent = "  ".repeat(self.nested_level + 1)
   for stmt in self.stmts {
-    logger.write_string(indent);
-    logger.write_string(stmt.to_string());
-    logger.write_string("\n");
+    logger.write_string(indent)
+    logger.write_string(stmt.to_string())
+    logger.write_string("\n")
   }
   if self.last_expr is Some(expr) {
-    logger.write_string(indent);
-    logger.write_string(expr.to_string());
-    logger.write_string("\n");
+    logger.write_string(indent)
+    logger.write_string(expr.to_string())
+    logger.write_string("\n")
   }
-  let last_indent = "  ".repeat(self.nested_level);
-  logger.write_string(last_indent);
-  logger.write_string("}");
+  let last_indent = "  ".repeat(self.nested_level)
+  logger.write_string(last_indent)
+  logger.write_string("}")
 }
 
 ///| MatchExpr represents pattern matching expressions with multiple arms.
@@ -519,23 +524,24 @@ pub impl Show for BlockExpr with output(self, logger) {
 /// inspect(match_expr, content=expect)
 /// ```
 pub struct MatchExpr {
-  nested_level: Int // for print indentation
-  expr: Expr
-  arms: Array[(Pattern, Expr)]
+  nested_level : Int // for print indentation
+  expr : Expr
+  arms : Array[(Pattern, Expr)]
 }
 
+///|
 pub impl Show for MatchExpr with output(self, logger) {
   // no ident before the first LBrace
-  logger.write_string("match \{self.expr} {\n");
-  let indent = "  ".repeat(self.nested_level + 1);
+  logger.write_string("match \{self.expr} {\n")
+  let indent = "  ".repeat(self.nested_level + 1)
   for arm in self.arms {
-    let (pattern, expr) = arm;
-    logger.write_string(indent);
-    logger.write_string("\{pattern} => \{expr};\n");
+    let (pattern, expr) = arm
+    logger.write_string(indent)
+    logger.write_string("\{pattern} => \{expr};\n")
   }
-  let last_indent = "  ".repeat(self.nested_level);
-  logger.write_string(last_indent);
-  logger.write_string("}");
+  let last_indent = "  ".repeat(self.nested_level)
+  logger.write_string(last_indent)
+  logger.write_string("}")
 }
 
 ///| Pattern is used in the match arm.
@@ -559,28 +565,29 @@ pub(all) enum Pattern {
   EnumPattern(Upper?, Upper, Array[Pattern])
 }
 
+///|
 pub impl Show for Pattern with output(self, logger) {
   match self {
-    Number(value) => logger.write_string(value.to_string());
-    Bool(value) => logger.write_string(if value { "true" } else { "false" });
-    WildCard => logger.write_string("_");
-    Ident(ident) => logger.write_string(ident.to_string());
+    Number(value) => logger.write_string(value.to_string())
+    Bool(value) => logger.write_string(if value { "true" } else { "false" })
+    WildCard => logger.write_string("_")
+    Ident(ident) => logger.write_string(ident.to_string())
     Tuple(patterns) => {
-      let patterns_str = patterns.map(p => p.to_string()).join(", ");
-      logger.write_string("(\{patterns_str})");
+      let patterns_str = patterns.map(p => p.to_string()).join(", ")
+      logger.write_string("(\{patterns_str})")
     }
     EnumPattern(prefix_opt, name, patterns) => {
       let prefix_str = match prefix_opt {
-        Some(prefix) => "\{prefix}::";
-        None => "";
+        Some(prefix) => "\{prefix}::"
+        None => ""
       }
       let patterns_str = if patterns.is_empty() {
-        "";
+        ""
       } else {
-        let s = patterns.map(p => p.to_string()).join(", ");
+        let s = patterns.map(p => p.to_string()).join(", ")
         "(\{s})"
       }
-      logger.write_string("\{prefix_str}\{name}\{patterns_str}");
+      logger.write_string("\{prefix_str}\{name}\{patterns_str}")
     }
   }
 }
@@ -641,69 +648,67 @@ pub(all) enum Stmt {
   While(Expr, BlockExpr)
   Return(Expr)
   ExprStmt(Expr)
-};
+}
 
+///|
 pub impl Show for Stmt with output(self, logger) {
   match self {
     LetTuple(bindings, ty_opt, expr) => {
-      let bindings_str = bindings.map(b => b.to_string()).join(", ");
+      let bindings_str = bindings.map(b => b.to_string()).join(", ")
       let ty_str = match ty_opt {
-        Some(ty) => ": \{ty}";
-        None => "";
+        Some(ty) => ": \{ty}"
+        None => ""
       }
-      logger.write_string("let (\{bindings_str})\{ty_str} = \{expr};");
+      logger.write_string("let (\{bindings_str})\{ty_str} = \{expr};")
     }
     LetMut(ident, ty_opt, expr) => {
       let ty_str = match ty_opt {
-        Some(ty) => ": \{ty}";
-        None => "";
+        Some(ty) => ": \{ty}"
+        None => ""
       }
-      logger.write_string("let mut \{ident}\{ty_str} = \{expr};");
+      logger.write_string("let mut \{ident}\{ty_str} = \{expr};")
     }
     Let(ident, ty_opt, expr) => {
       let ty_str = match ty_opt {
-        Some(ty) => ": \{ty}";
-        None => "";
+        Some(ty) => ": \{ty}"
+        None => ""
       }
-      logger.write_string("let \{ident}\{ty_str} = \{expr};");
+      logger.write_string("let \{ident}\{ty_str} = \{expr};")
     }
     LocalFuncDef(fname, params, ret_ty_opt, body) => {
-      let params_str = params.map(fn(p) {
-        let (name, ty_opt) = p
-        match ty_opt {
-          Some(ty) => "\{name}: \{ty}"
-          None => name.to_string()
-        }
-      }).join(", ");
+      let params_str = params
+        .map(fn(p) {
+          let (name, ty_opt) = p
+          match ty_opt {
+            Some(ty) => "\{name}: \{ty}"
+            None => name.to_string()
+          }
+        })
+        .join(", ")
       let ret_ty_str = match ret_ty_opt {
-        Some(ret_ty) => " -> \{ret_ty}";
-        None => "";
+        Some(ret_ty) => " -> \{ret_ty}"
+        None => ""
       }
-      logger.write_string("fn \{fname}(\{params_str})\{ret_ty_str} ");
-      logger.write_string(body.to_string());
+      logger.write_string("fn \{fname}(\{params_str})\{ret_ty_str} ")
+      logger.write_string(body.to_string())
     }
-    Assign(left_value, expr) => {
-      logger.write_string("\{left_value} = \{expr};");
-    }
+    Assign(left_value, expr) => logger.write_string("\{left_value} = \{expr};")
     While(cond, body) => {
-      logger.write_string("while \{cond} ");
-      logger.write_string(body.to_string());
+      logger.write_string("while \{cond} ")
+      logger.write_string(body.to_string())
     }
-    Return(expr) => {
-      logger.write_string("return \{expr};");
-    }
+    Return(expr) => logger.write_string("return \{expr};")
     ExprStmt(expr) => {
       //logger.write_string("let _ = \{expr};");
       let prefix = match expr {
-        IfLevelExpr(iexpr) => {
+        IfLevelExpr(iexpr) =>
           match iexpr {
-            ApplyExpr(_) => "let _ = " 
+            ApplyExpr(_) => "let _ = "
             _ => ""
           }
-        }
         _ => "let _ = "
       }
-      logger.write_string("\{prefix}\{expr};");
+      logger.write_string("\{prefix}\{expr};")
     }
   }
 }
@@ -719,14 +724,14 @@ pub(all) enum Binding {
   WhileCard
 }
 
+///|
 pub impl Show for Binding with output(self, logger) {
   let s = match self {
-    Ident(ident) => ident.to_string();
-    WhileCard => "_".to_string();
+    Ident(ident) => ident.to_string()
+    WhileCard => "_".to_string()
   }
-  logger.write_string(s);
+  logger.write_string(s)
 }
-
 
 ///| LeftValue is the left-hand side of an assignment.
 ///
@@ -746,13 +751,14 @@ pub(all) enum LeftValue {
   ArrAcc(LeftValue, Expr) // x[y]
 }
 
+///|
 pub impl Show for LeftValue with output(self, logger) {
   let s = match self {
-    Ident(ident) => ident.to_string();
-    DotAcc(left, ident) => "\{left}.\{ident}";
-    ArrAcc(left, index) => "\{left}[\{index}]";
+    Ident(ident) => ident.to_string()
+    DotAcc(left, ident) => "\{left}.\{ident}"
+    ArrAcc(left, index) => "\{left}[\{index}]"
   }
-  logger.write_string(s);
+  logger.write_string(s)
 }
 
 ///| TopLet represents top-level let bindings with optional type annotations.
@@ -781,17 +787,18 @@ pub impl Show for LeftValue with output(self, logger) {
 /// inspect(top_let3, content="let array_var: Array[Int] = [42, 42];")
 /// ```
 pub(all) struct TopLet {
-  name: Ident
-  ty: Type?
-  value: Expr
+  name : Ident
+  ty : Type?
+  value : Expr
 }
 
+///|
 pub impl Show for TopLet with output(self, logger) {
   let ty_str = match self.ty {
-    Some(ty) => ": \{ty}";
-    None => "";
+    Some(ty) => ": \{ty}"
+    None => ""
   }
-  logger.write_string("let \{self.name}\{ty_str} = \{self.value};");
+  logger.write_string("let \{self.name}\{ty_str} = \{self.value};")
 }
 
 ///| TopFuncDef represents top-level function definitions with optional generic parameters.
@@ -837,25 +844,28 @@ pub impl Show for TopLet with output(self, logger) {
 /// inspect(func3, content="fn get_answer() -> Int {\n  42\n}")
 /// ```
 pub(all) struct TopFuncDef {
-  generic_param: Upper?
-  name: Ident
-  params: Array[(Ident, Type)]
-  ret_ty: Type
-  body: BlockExpr
+  generic_param : Upper?
+  name : Ident
+  params : Array[(Ident, Type)]
+  ret_ty : Type
+  body : BlockExpr
 }
 
+///|
 pub impl Show for TopFuncDef with output(self, logger) {
   let generic_str = match self.generic_param {
-    Some(param) => "[\{param}]";
-    None => "";
+    Some(param) => "[\{param}]"
+    None => ""
   }
-  let params_str = self.params.map(p => "\{p.0}: \{p.1}").join(", ");
+  let params_str = self.params.map(p => "\{p.0}: \{p.1}").join(", ")
   if self.name != "main" {
-    logger.write_string("fn\{generic_str} \{self.name}(\{params_str}) -> \{self.ret_ty} ");
+    logger.write_string(
+      "fn\{generic_str} \{self.name}(\{params_str}) -> \{self.ret_ty} ",
+    )
   } else {
-    logger.write_string("fn main ");
+    logger.write_string("fn main ")
   }
-  logger.write_string(self.body.to_string());
+  logger.write_string(self.body.to_string())
 }
 
 ///| StructDef represents struct type definitions with optional generic parameters.
@@ -898,33 +908,35 @@ pub impl Show for TopFuncDef with output(self, logger) {
 /// inspect(struct3, content="struct Empty {}\n")
 /// ```
 pub(all) struct StructDef {
-  generic_param: Upper?
-  name: Upper
-  fields: Array[(Ident, Type)]
+  generic_param : Upper?
+  name : Upper
+  fields : Array[(Ident, Type)]
 }
 
-pub fn StructDef::type_of(self: Self) -> Type {
+///|
+pub fn StructDef::type_of(self : Self) -> Type {
   Type::Struct(self.name, self.fields)
 }
 
+///|
 pub impl Show for StructDef with output(self, logger) {
   let generic_str = match self.generic_param {
-    Some(param) => "[\{param}]";
-    None => "";
+    Some(param) => "[\{param}]"
+    None => ""
   }
-  logger.write_string("struct \{self.name}\{generic_str} {");
+  logger.write_string("struct \{self.name}\{generic_str} {")
   if self.fields.is_empty() {
-    logger.write_string("}\n");
-    return;
+    logger.write_string("}\n")
+    return
   }
-  logger.write_string("\n");
-  let indent = "  ";
+  logger.write_string("\n")
+  let indent = "  "
   for field in self.fields {
-    let (name, ty) = field;
-    logger.write_string(indent);
-    logger.write_string("\{name}: \{ty};\n");
+    let (name, ty) = field
+    logger.write_string(indent)
+    logger.write_string("\{name}: \{ty};\n")
   }
-  logger.write_string("}");
+  logger.write_string("}")
 }
 
 ///| EnumDef represents enum type definitions with optional generic parameters.
@@ -978,42 +990,45 @@ pub impl Show for StructDef with output(self, logger) {
 /// inspect(enum3, content="enum Never {}\n")
 /// ```
 pub(all) struct EnumDef {
-  generic_param: Upper?
-  name: Upper
-  variants: Array[(Upper, Array[Type])] // e.g. Point(x: Int, y: Int)
+  generic_param : Upper?
+  name : Upper
+  variants : Array[(Upper, Array[Type])] // e.g. Point(x: Int, y: Int)
 }
 
-pub fn EnumDef::type_of(self: Self) -> Type {
+///|
+pub fn EnumDef::type_of(self : Self) -> Type {
   Type::Enum(self.name, self.variants)
 }
 
+///|
 pub impl Show for EnumDef with output(self, logger) {
   let generic_str = match self.generic_param {
-    Some(param) => "[\{param}]";
-    None => "";
+    Some(param) => "[\{param}]"
+    None => ""
   }
-  logger.write_string("enum \{self.name}\{generic_str} {");
+  logger.write_string("enum \{self.name}\{generic_str} {")
   if self.variants.is_empty() {
-    logger.write_string("}\n");
-    return;
+    logger.write_string("}\n")
+    return
   }
-  logger.write_string("\n");
-  let indent = "  ";
+  logger.write_string("\n")
+  let indent = "  "
   for variant in self.variants {
-    let (name, fields) = variant;
-    logger.write_string(indent);
-    logger.write_string("\{name}");
+    let (name, fields) = variant
+    logger.write_string(indent)
+    logger.write_string("\{name}")
     if fields.is_empty() {
-      logger.write_string(";\n");
-      continue;
+      logger.write_string(";\n")
+      continue
     }
-    let fields_str = fields.map(f => f.to_string()).join(", ");
-    logger.write_string("(\{fields_str})");
-    logger.write_string(";\n");
+    let fields_str = fields.map(f => f.to_string()).join(", ")
+    logger.write_string("(\{fields_str})")
+    logger.write_string(";\n")
   }
-  logger.write_string("}");
+  logger.write_string("}")
 }
 
+///|
 pub enum TopDecl {
   TopLet(TopLet)
   TopFuncDef(TopFuncDef)
@@ -1021,22 +1036,25 @@ pub enum TopDecl {
   EnumDef(EnumDef)
 }
 
+///|
 pub impl Show for TopDecl with output(self, logger) {
   match self {
-    TopLet(top_let) => logger.write_string(top_let.to_string());
-    TopFuncDef(top_func_def) => logger.write_string(top_func_def.to_string());
-    StructDef(struct_def) => logger.write_string(struct_def.to_string());
-    EnumDef(enum_def) => logger.write_string(enum_def.to_string());
+    TopLet(top_let) => logger.write_string(top_let.to_string())
+    TopFuncDef(top_func_def) => logger.write_string(top_func_def.to_string())
+    StructDef(struct_def) => logger.write_string(struct_def.to_string())
+    EnumDef(enum_def) => logger.write_string(enum_def.to_string())
   }
 }
 
+///|
 pub struct Program {
-  top_decls: Array[TopDecl]
+  top_decls : Array[TopDecl]
 }
 
+///|
 pub impl Show for Program with output(self, logger) {
   for decl in self.top_decls {
-    logger.write_string(decl.to_string());
-    logger.write_string("\n\n");
+    logger.write_string(decl.to_string())
+    logger.write_string("\n\n")
   }
 }
