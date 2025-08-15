@@ -1291,6 +1291,8 @@ fn RandomGenerator::gen_let_tuple_stmt(self: Self) -> Stmt {
       bindings.push(Binding::Ident(var_name))
       // 在生成表达式后才添加到环境，避免循环引用
       self.var_env.set(var_name, elem_type)
+      // 记录变量定义
+      self.record_var_definition(var_name, elem_type)
     } else {
       // 生成通配符绑定
       bindings.push(Binding::WhileCard)
@@ -1448,16 +1450,17 @@ pub fn RandomGenerator::gen_local_func_def_stmt(self: Self) -> Stmt {
     
     // 将参数添加到函数内部环境中
     self.var_env.set(param_name, param_type)
+    // 记录参数为已定义变量
+    self.record_var_definition(param_name, param_type)
+    // 参数被定义时即被使用
+    self.mark_var_used(param_name)
   }
   
-  // 生成函数体 - 使用简化的版本避免复杂性
+  // 生成函数体 - 使用变量跟踪
   let old_return_type = self.current_return_type
   self.current_return_type = ret_ty
   
-  let body = BlockExpr::new(nested_level=self.current_depth + 1)
-  // 只生成简单的返回表达式，不生成复杂的语句
-  let return_expr = self.gen_expr(ret_ty, true)
-  body.set_last_expr(return_expr)
+  let body = self.gen_block_expr_with_usage_tracking(ret_ty)
   
   // 恢复环境
   self.current_return_type = old_return_type
@@ -1490,6 +1493,148 @@ fn RandomGenerator::gen_expr_stmt(self: Self) -> Stmt {
     }
   }
   ExprStmt(expr)
+}
+
+/// 生成对未使用类型的构造和使用语句
+fn RandomGenerator::gen_force_use_unused_types(self: Self, block: BlockExpr) -> Unit {
+  // 强制使用所有结构体类型
+  self.struct_defs.each(fn(struct_name, struct_def) {
+    if true {  // 使用所有结构体
+      // 生成结构体构造表达式并赋值给变量
+      let var_name = self.gen_ident()
+      let struct_expr = self.gen_struct_construct_expr(struct_name, struct_def.fields)
+      let let_stmt = Let(var_name, Some(struct_def.type_of()), struct_expr)
+      block.push(let_stmt)
+      
+      // 访问所有结构体字段
+      for field in struct_def.fields {
+        let (field_name, field_type) = field
+        let field_access = IfLevelExpr(ApplyExpr(DotAcc(
+          ApplyExpr::ValueExpr(ValueExpr::IdentExpr(var_name)),
+          field_name
+        )))
+        
+        match field_type {
+          Int => {
+            // 为Int类型生成println调用
+            let println_call = IfLevelExpr(ApplyExpr(Call(
+              ApplyExpr::ValueExpr(ValueExpr::IdentExpr(Ident("println"))),
+              [field_access]
+            )))
+            block.push(ExprStmt(println_call))
+          }
+          _ => {
+            // 为其他类型生成简单的表达式语句
+            block.push(ExprStmt(field_access))
+          }
+        }
+      }
+      
+      // 使用整个结构体
+      let usage_expr = IfLevelExpr(ApplyExpr(ValueExpr(IdentExpr(var_name))))
+      block.push(ExprStmt(usage_expr))
+    }
+  })
+  
+  // 强制使用所有枚举类型，通过match表达式
+  self.enum_defs.each(fn(enum_name, enum_def) {
+    if true {  // 使用所有枚举
+      // 生成枚举构造表达式并赋值给变量
+      let var_name = self.gen_ident()
+      let enum_expr = self.gen_enum_construct_expr(enum_name, enum_def.variants)
+      let let_stmt = Let(var_name, Some(enum_def.type_of()), enum_expr)
+      block.push(let_stmt)
+      
+      // 生成match表达式使用所有变体
+      if !enum_def.variants.is_empty() {
+        let match_arms = Array::new()
+        for variant in enum_def.variants {
+          let (variant_name, variant_types) = variant
+          let patterns = Array::new()
+          for _ in variant_types {
+            patterns.push(Pattern::WildCard)  // 使用通配符模式
+          }
+          let pattern = Pattern::EnumPattern(Some(enum_name), variant_name, patterns)
+          let arm_expr = IfLevelExpr(ApplyExpr(ValueExpr(UnitExpr)))
+          match_arms.push((pattern, arm_expr))
+        }
+        
+        let var_expr = IfLevelExpr(ApplyExpr(ValueExpr(IdentExpr(var_name))))
+        let match_expr = MatchExpr::{ nested_level: self.current_depth + 1, expr: var_expr, arms: match_arms }
+        let match_stmt = ExprStmt(IfLevelExpr(MatchExpr(match_expr)))
+        block.push(match_stmt)
+      }
+      
+      // 使用整个枚举
+      let usage_expr = IfLevelExpr(ApplyExpr(ValueExpr(IdentExpr(var_name))))
+      block.push(ExprStmt(usage_expr))
+    }
+  })
+  
+  // 强制调用所有函数
+  self.func_defs.each(fn(func_name, func_def) {
+    if true {  // 调用所有函数
+      // 生成函数调用
+      let args = Array::new()
+      for param in func_def.params {
+        let (_, param_type) = param
+        args.push(self.gen_expr(param_type, true))
+      }
+      let func_call = IfLevelExpr(ApplyExpr(Call(
+        ApplyExpr::ValueExpr(ValueExpr::IdentExpr(func_name)),
+        args
+      )))
+      
+      if func_def.ret_ty == Unit {
+        // Unit返回类型，直接作为表达式语句
+        block.push(ExprStmt(func_call))
+      } else {
+        // 非Unit返回类型，赋值给变量然后使用
+        let var_name = self.gen_ident()
+        let let_stmt = Let(var_name, Some(func_def.ret_ty), func_call)
+        block.push(let_stmt)
+        
+        // 根据返回类型决定如何使用
+        match func_def.ret_ty {
+          Int => {
+            let var_expr = IfLevelExpr(ApplyExpr(ValueExpr(IdentExpr(var_name))))
+            let println_call = IfLevelExpr(ApplyExpr(Call(
+              ApplyExpr::ValueExpr(ValueExpr::IdentExpr(Ident("println"))),
+              [var_expr]
+            )))
+            block.push(ExprStmt(println_call))
+          }
+          _ => {
+            let usage_expr = IfLevelExpr(ApplyExpr(ValueExpr(IdentExpr(var_name))))
+            block.push(ExprStmt(usage_expr))
+          }
+        }
+      }
+    }
+  })
+  
+  // 强制使用所有顶层变量
+  self.var_env.map.each(fn(var_name, var_type) {
+    // 检查这个变量是否是在全局作用域（非函数参数）
+    if self.current_depth <= 1 {  // 在main函数的顶层
+      match var_type {
+        Int => {
+          // 为Int类型生成println调用
+          let var_expr = IfLevelExpr(ApplyExpr(ValueExpr(IdentExpr(var_name))))
+          let println_call = IfLevelExpr(ApplyExpr(Call(
+            ApplyExpr::ValueExpr(ValueExpr::IdentExpr(Ident("println"))),
+            [var_expr]
+          )))
+          block.push(ExprStmt(println_call))
+        }
+        _ => {
+          // 为其他类型生成简单的表达式语句
+          let var_expr = IfLevelExpr(ApplyExpr(ValueExpr(IdentExpr(var_name))))
+          block.push(ExprStmt(var_expr))
+        }
+      }
+    }
+  })
 }
 
 /// 生成代码块并在结束时处理未使用变量
@@ -1542,19 +1687,59 @@ fn RandomGenerator::gen_block_expr_with_usage_tracking(self: Self, return_type: 
     }
   })
   
-  // 特别处理可变变量：如果有可变变量从未被赋值，生成赋值语句
-  self.unused_mutable_vars.each(fn(var_name, var_type) {
+  // 额外增强：对于任何在当前环境中可见但标记为未使用的变量，强制使用
+  self.var_env.map.each(fn(var_name, var_type) {
+    match self.used_vars.get(var_name) {
+      Some(false) => {
+        // 未使用的变量，强制生成使用语句
+        match var_type {
+          Int => {
+            let var_expr = IfLevelExpr(ApplyExpr(ValueExpr(IdentExpr(var_name))))
+            let println_call = IfLevelExpr(ApplyExpr(Call(
+              ApplyExpr::ValueExpr(ValueExpr::IdentExpr(Ident("println"))),
+              [var_expr]
+            )))
+            block.push(ExprStmt(println_call))
+          }
+          _ => {
+            let var_expr = IfLevelExpr(ApplyExpr(ValueExpr(IdentExpr(var_name))))
+            block.push(ExprStmt(var_expr))
+          }
+        }
+        self.mark_var_used(var_name)
+      }
+      _ => ()
+    }
+  })
+  
+  // 特别处理可变变量：确保所有可变变量的可变性都被使用
+  self.mutable_vars.map.each(fn(var_name, var_type) {
     match self.var_env.get(var_name) {
       Some(_) => {
-        // 可变变量在当前环境中可见，生成赋值以使用其可变性
+        // 可变变量在当前环境中可见，生成多次赋值以使用其可变性
         let left_value = LeftValue::Ident(var_name)
-        let new_value = self.gen_expr(var_type, true)  // 生成简单表达式
-        block.push(Assign(left_value, new_value))
+        
+        // 第一次赋值
+        let new_value1 = self.gen_expr(var_type, true)  // 生成简单表达式
+        block.push(Assign(left_value, new_value1))
+        
+        // 第二次赋值，确保可变性被使用
+        let new_value2 = self.gen_expr(var_type, true)  // 生成另一个简单表达式
+        block.push(Assign(left_value, new_value2))
+        
         self.mark_mutable_var_used(var_name)
       }
       None => () // 变量不在当前环境中可见，跳过
     }
   })
+  
+  // 清空未使用列表
+  self.unused_mutable_vars = Map::new()
+  
+  // 在main函数中强制使用一些顶层定义
+  if self.current_depth <= 1 {  // 只在顶层块中生成
+    self.gen_force_use_unused_types(block)
+  }
   
   block
 }
@@ -1769,6 +1954,10 @@ pub fn RandomGenerator::gen_top_func_def(self: Self) -> TopFuncDef {
     
     // 将参数添加到环境中
     self.var_env.set(param_name, param_type)
+    // 记录参数为已定义变量
+    self.record_var_definition(param_name, param_type)
+    // 参数被定义时即被使用
+    self.mark_var_used(param_name)
   }
   
   // 生成返回类型和函数体
@@ -1776,7 +1965,8 @@ pub fn RandomGenerator::gen_top_func_def(self: Self) -> TopFuncDef {
   let old_return_type = self.current_return_type
   self.current_return_type = ret_ty
   
-  let body = self.gen_block_expr(ret_ty)
+  // 使用变量跟踪的代码块生成
+  let body = self.gen_block_expr_with_usage_tracking(ret_ty)
   
   // 恢复环境和返回类型
   self.current_return_type = old_return_type
