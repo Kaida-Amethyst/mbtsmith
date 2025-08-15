@@ -531,7 +531,7 @@ pub impl Show for MatchExpr with output(self, logger) {
   for arm in self.arms {
     let (pattern, expr) = arm;
     logger.write_string(indent);
-    logger.write_string("\{pattern} => \{expr},\n");
+    logger.write_string("\{pattern} => \{expr};\n");
   }
   let last_indent = "  ".repeat(self.nested_level);
   logger.write_string(last_indent);
