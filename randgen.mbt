@@ -6,15 +6,15 @@ struct Env[K, V] {
   parent: Env[K, V]?
 }
 
-fn Env::new[K, V]() -> Env[K, V] {
+fn[K, V] Env::new() -> Env[K, V] {
   { map: Map::new(), parent: None }
 }
 
-fn Env::sub_env[K, V](self: Self[K, V]) -> Env[K, V] {
+fn[K, V] Env::sub_env(self: Self[K, V]) -> Env[K, V] {
   { map: Map::new(), parent: Some(self) }
 }
 
-fn Env::get[K : Eq + Hash, V](self: Self[K, V], key: K) -> V? {
+fn[K : Eq + Hash, V] Env::get(self: Self[K, V], key: K) -> V? {
   match self.map.get(key) {
     Some(value) => Some(value)
     None => match self.parent {
@@ -24,11 +24,11 @@ fn Env::get[K : Eq + Hash, V](self: Self[K, V], key: K) -> V? {
   }
 }
 
-fn Env::set[K : Eq + Hash, V](self: Self[K, V], key: K, value: V) -> Unit {
+fn[K : Eq + Hash, V] Env::set(self: Self[K, V], key: K, value: V) -> Unit {
   self.map.set(key, value)
 }
 
-fn Env::collect_vars_of_type[K, V : Eq](self: Self[K, V], target_type: V) -> Array[K] {
+fn[K, V : Eq] Env::collect_vars_of_type(self: Self[K, V], target_type: V) -> Array[K] {
   let result = Array::new()
   self.map.each(fn(key, value) {
     if value == target_type {
@@ -121,7 +121,7 @@ fn RandomGenerator::rand_double(self: Self) -> Double {
   self.rand.double() * 1000.0  // 扩大范围，生成更多样的浮点数
 }
 
-fn RandomGenerator::choice[T](self: Self, choices: Array[T]) -> T? {
+fn[T] RandomGenerator::choice(self: Self, choices: Array[T]) -> T? {
   if choices.is_empty() {
     None
   } else {
@@ -129,7 +129,7 @@ fn RandomGenerator::choice[T](self: Self, choices: Array[T]) -> T? {
   }
 }
 
-fn RandomGenerator::weighted_choice[T](self: Self, choices: Array[(T, Int)]) -> T? {
+fn[T] RandomGenerator::weighted_choice(self: Self, choices: Array[(T, Int)]) -> T? {
   if choices.is_empty() {
     return None
   }
@@ -184,6 +184,7 @@ fn RandomGenerator::gen_basic_type(self: Self) -> Type {
 
 /// 检查类型是否为基础类型
 fn RandomGenerator::is_basic_type(self: Self, ty: Type) -> Bool {
+  ignore(self)
   match ty {
     Unit | Bool | Int | Double => true
     _ => false
@@ -238,7 +239,7 @@ fn RandomGenerator::gen_tuple_type(self: Self) -> Type {
 fn RandomGenerator::gen_custom_struct_type(self: Self) -> Type {
   // 从已定义的结构体中随机选择一个
   let available_structs = Array::new()
-  self.struct_defs.each(fn(name, struct_def) {
+  self.struct_defs.each(fn(name, _) {
     available_structs.push(name)
   })
   
@@ -256,7 +257,7 @@ fn RandomGenerator::gen_custom_struct_type(self: Self) -> Type {
 fn RandomGenerator::gen_custom_enum_type(self: Self) -> Type {
   // 从已定义的枚举中随机选择一个
   let available_enums = Array::new()
-  self.enum_defs.each(fn(name, enum_def) {
+  self.enum_defs.each(fn(name, _) {
     available_enums.push(name)
   })
   
@@ -366,13 +367,13 @@ fn RandomGenerator::gen_enum_construct_expr(self: Self, name: Upper, variants: A
 /// 生成变量引用表达式
 fn RandomGenerator::gen_var_expr(self: Self, ty: Type) -> Expr? {
   match self.find_var_of_type(ty) {
-    Some(var) => {
+    Some(v) => {
       // 如果是可变变量，标记为已使用
-      match self.unused_mutable_vars.get(var) {
-        Some(_) => self.mark_mutable_var_used(var)
+      match self.unused_mutable_vars.get(v) {
+        Some(_) => self.mark_mutable_var_used(v)
         None => ()
       }
-      Some(IfLevelExpr(ApplyExpr(ValueExpr(IdentExpr(var)))))
+      Some(IfLevelExpr(ApplyExpr(ValueExpr(IdentExpr(v)))))
     }
     None => None
   }
@@ -459,7 +460,7 @@ fn RandomGenerator::gen_dot_access_expr(self: Self, expected_type: Type) -> Expr
   
   self.var_env.map.each(fn(var_name, var_type) {
     match var_type {
-      Struct(struct_name, fields) => {
+      Struct(_, fields) => {
         for field in fields {
           let (field_name, field_type) = field
           if field_type == expected_type {

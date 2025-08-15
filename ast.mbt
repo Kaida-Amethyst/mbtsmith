@@ -293,25 +293,6 @@ pub(all) enum Expr {
   IfLevelExpr(IfLevelExpr)
 }
 
-fn Expr::from_value_expr(value_expr: ValueExpr) -> Expr {
-  IfLevelExpr(ApplyExpr(ValueExpr(value_expr)))
-}
-
-fn Expr::from_int(value: Int) -> Expr {
-  let val_expr = ValueExpr::IntExpr(value);
-  IfLevelExpr(ApplyExpr(ValueExpr(val_expr)))
-}
-
-fn Expr::from_bool(value: Bool) -> Expr {
-  let val_expr = ValueExpr::BoolExpr(value);
-  IfLevelExpr(ApplyExpr(ValueExpr(val_expr)))
-}
-
-fn Expr::from_double(value: Double) -> Expr {
-  let val_expr = ValueExpr::FloatExpr(value);
-  IfLevelExpr(ApplyExpr(ValueExpr(val_expr)))
-}
-
 pub impl Show for Expr with output(self, logger) {
   let s = match self {
     AndExpr(left, right) => "\{left} && \{right}";
