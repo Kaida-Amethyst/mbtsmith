@@ -60,6 +60,10 @@ pub struct RandomGenerator {
   mut unused_mutable_vars: Map[Ident, Type] // 未使用的可变变量（需要强制赋值）
   type_env: Env[Upper, Type]    // 自定义类型环境
   
+  // 跟踪所有定义的变量和它们的使用情况
+  mut all_defined_vars: Map[Ident, Type]  // 所有定义的变量
+  mut used_vars: Map[Ident, Bool]         // 已使用的变量
+  
   // 已定义的类型和函数
   struct_defs: Map[Upper, StructDef]
   enum_defs: Map[Upper, EnumDef]
@@ -91,6 +95,8 @@ pub fn RandomGenerator::new(seed~:Int = 0) -> RandomGenerator {
     mutable_vars: Env::new(),
     unused_mutable_vars: Map::new(),
     type_env: Env::new(),
+    all_defined_vars: Map::new(),
+    used_vars: Map::new(),
     struct_defs: Map::new(),
     enum_defs: Map::new(),
     func_defs: Map::new(),
@@ -284,6 +290,34 @@ fn RandomGenerator::mark_mutable_var_used(self: Self, var_name: Ident) -> Unit {
   self.unused_mutable_vars = new_map
 }
 
+/// 记录变量定义
+fn RandomGenerator::record_var_definition(self: Self, var_name: Ident, var_type: Type) -> Unit {
+  self.all_defined_vars = {
+    let new_map = Map::new()
+    self.all_defined_vars.each(fn(k, v) { new_map.set(k, v) })
+    new_map.set(var_name, var_type)
+    new_map
+  }
+  self.used_vars = {
+    let new_map = Map::new()
+    self.used_vars.each(fn(k, v) { new_map.set(k, v) })
+    new_map.set(var_name, false)  // 初始标记为未使用
+    new_map
+  }
+}
+
+/// 标记变量已使用
+fn RandomGenerator::mark_var_used(self: Self, var_name: Ident) -> Unit {
+  self.used_vars = {
+    let new_map = Map::new()
+    self.used_vars.each(fn(k, v) { new_map.set(k, v) })
+    new_map.set(var_name, true)
+    new_map
+  }
+}
+
+
+
 
 
 /// 安全地生成对未使用可变变量的强制赋值语句
@@ -375,6 +409,9 @@ fn RandomGenerator::gen_var_expr(self: Self, ty: Type) -> Expr? {
       // 再次验证变量确实存在
       match self.var_env.get(v) {
         Some(_) => {
+          // 标记变量已使用
+          self.mark_var_used(v)
+          
           // 如果是可变变量，标记为已使用
           match self.unused_mutable_vars.get(v) {
             Some(_) => self.mark_mutable_var_used(v)
@@ -1167,13 +1204,13 @@ fn RandomGenerator::gen_stmt(self: Self) -> Stmt {
       _ => self.gen_let_stmt()
     }
   } else {
-    // 在较浅深度时，可以生成更复杂的语句，但要减少问题语句的权重
+    // 在较浅深度时，可以生成更复杂的语句，确保可变变量得到使用
     let choices = [
-      (0, 40), // let语句 - 增加权重
-      (1, 30), // let mut语句 - 增加权重
-      (2, 10), // 赋值语句 - 减少权重，因为容易出错
+      (0, 35), // let语句 - 适中权重
+      (1, 20), // let mut语句 - 减少权重，避免生成过多未使用的可变变量
+      (2, 25), // 赋值语句 - 增加权重，确保可变变量被使用
       (3, 8),  // 表达式语句 - 减少权重
-      (4, 5),  // while循环 - 减少权重
+      (4, 5),  // while循环 - 正常权重
       (5, 3),  // 元组解构let - 减少权重
       (6, 1),  // return语句 - 减少权重
       (7, 1),  // 局部函数定义 - 大幅减少权重
@@ -1201,6 +1238,9 @@ fn RandomGenerator::gen_let_stmt(self: Self) -> Stmt {
   // 将变量添加到环境中
   self.var_env.set(var_name, var_type)
   
+  // 记录变量定义
+  self.record_var_definition(var_name, var_type)
+  
   // 更频繁地生成类型注解，提高代码可读性
   let type_annotation = if self.rand_int(10) < 7 { Some(var_type) } else { None }
   Let(var_name, type_annotation, init_expr)
@@ -1214,6 +1254,9 @@ fn RandomGenerator::gen_let_mut_stmt(self: Self) -> Stmt {
   // 将变量添加到环境中（包括可变变量环境）
   self.var_env.set(var_name, var_type)
   self.mutable_vars.set(var_name, var_type)
+  
+  // 记录变量定义
+  self.record_var_definition(var_name, var_type)
   
   // 将变量添加到未使用的可变变量列表中
   self.unused_mutable_vars.set(var_name, var_type)
@@ -1306,37 +1349,60 @@ fn RandomGenerator::collect_mutable_vars_recursive(self: Self, env: Env[Ident, T
 }
 
 fn RandomGenerator::gen_while_stmt(self: Self) -> Stmt {
-  // 为while循环生成简单的条件，避免复杂的if表达式
-  let cond = match self.rand_int(3) {
-    0 => self.gen_literal_expr(Bool)  // 简单的bool字面量
-    1 => {
-      // 简单的比较表达式
-      let left = self.gen_expr(Int, true)
-      let right = self.gen_expr(Int, true)
-      self.make_comparison(left, right)
-    }
-    _ => {
-      // 简单的变量引用
-      match self.gen_var_expr(Bool) {
-        Some(expr) => expr
-        None => self.gen_literal_expr(Bool)
-      }
-    }
-  }
+  // 生成一个带有确定终止条件的while循环
+  // 使用模式：let mut counter = 0; while counter < limit { ... counter = counter + 1 }
   
-  // 创建子环境来避免无限循环变量冲突
+  // 创建子环境
   let old_var_env = self.var_env
   let old_mut_env = self.mutable_vars
   self.var_env = old_var_env.sub_env()
   self.mutable_vars = old_mut_env.sub_env()
   
+  // 生成循环计数器变量
+  let counter_name = self.gen_ident()
+  let counter_type = Int
+  let initial_value = IfLevelExpr(ApplyExpr(ValueExpr(IntExpr(0))))  // 从0开始
+  
+  // 将计数器添加到环境中
+  self.var_env.set(counter_name, counter_type)
+  self.mutable_vars.set(counter_name, counter_type)
+  
+  // 生成循环限制
+  let limit = self.rand_int(10) + 1  // 1-10次循环
+  let limit_expr = IfLevelExpr(ApplyExpr(ValueExpr(IntExpr(limit))))
+  
+  // 生成条件：counter < limit
+  let counter_ref = IfLevelExpr(ApplyExpr(ValueExpr(IdentExpr(counter_name))))
+  let cond = CmpExpr(Lt, counter_ref, limit_expr)
+  
+  // 生成循环体，并在最后添加计数器递增
   let body = self.gen_block_expr(Unit)
+  
+  // 在循环体中添加计数器递增语句
+  let increment_expr = AddExpr(
+    IfLevelExpr(ApplyExpr(ValueExpr(IdentExpr(counter_name)))),
+    IfLevelExpr(ApplyExpr(ValueExpr(IntExpr(1))))
+  )
+  let increment_stmt = Assign(LeftValue::Ident(counter_name), increment_expr)
+  body.push(increment_stmt)
   
   // 恢复环境
   self.var_env = old_var_env
   self.mutable_vars = old_mut_env
   
-  While(cond, body)
+  // 创建一个包含let mut和while的复合语句块
+  let wrapper_block = BlockExpr::new(nested_level=self.current_depth)
+  
+  // 添加let mut语句
+  let let_mut_stmt = LetMut(counter_name, Some(counter_type), initial_value)
+  wrapper_block.push(let_mut_stmt)
+  
+  // 添加while语句
+  let while_stmt = While(cond, body)
+  wrapper_block.push(while_stmt)
+  
+  // 返回一个表达式语句包装这个块
+  ExprStmt(IfLevelExpr(ApplyExpr(ValueExpr(BlockExpr(wrapper_block)))))
 }
 
 fn RandomGenerator::gen_return_stmt(self: Self) -> Stmt {
@@ -1424,6 +1490,73 @@ fn RandomGenerator::gen_expr_stmt(self: Self) -> Stmt {
     }
   }
   ExprStmt(expr)
+}
+
+/// 生成代码块并在结束时处理未使用变量
+fn RandomGenerator::gen_block_expr_with_usage_tracking(self: Self, return_type: Type) -> BlockExpr {
+  // 保存当前已定义变量状态
+  let scope_start_vars = Map::new()
+  self.all_defined_vars.each(fn(k, v) { scope_start_vars.set(k, v) })
+  
+  // 生成正常的代码块
+  let block = self.gen_block_expr(return_type)
+  
+  // 为当前作用域中定义但未使用的变量生成使用语句
+  self.all_defined_vars.each(fn(var_name, var_type) {
+    // 检查这个变量是否是在当前作用域中新定义的
+    match scope_start_vars.get(var_name) {
+      None => {
+        // 这是一个新定义的变量，检查是否未使用
+        match self.used_vars.get(var_name) {
+          Some(false) => {
+            // 变量未使用，生成使用语句
+            match self.var_env.get(var_name) {
+              Some(_) => {
+                // 变量在当前环境中可见，生成使用语句
+                match var_type {
+                  Int => {
+                    // 为Int类型生成println调用
+                    let var_expr = IfLevelExpr(ApplyExpr(ValueExpr(IdentExpr(var_name))))
+                    let println_call = IfLevelExpr(ApplyExpr(Call(
+                      ApplyExpr::ValueExpr(ValueExpr::IdentExpr(Ident("println"))),
+                      [var_expr]
+                    )))
+                    block.push(ExprStmt(println_call))
+                  }
+                  _ => {
+                    // 为其他类型生成简单的表达式语句
+                    let var_expr = IfLevelExpr(ApplyExpr(ValueExpr(IdentExpr(var_name))))
+                    block.push(ExprStmt(var_expr))
+                  }
+                }
+                // 标记变量已使用
+                self.mark_var_used(var_name)
+              }
+              None => ()  // 变量不可见，跳过
+            }
+          }
+          _ => ()  // 变量已使用或未定义，跳过
+        }
+      }
+      Some(_) => ()  // 变量不是在当前作用域定义的，跳过
+    }
+  })
+  
+  // 特别处理可变变量：如果有可变变量从未被赋值，生成赋值语句
+  self.unused_mutable_vars.each(fn(var_name, var_type) {
+    match self.var_env.get(var_name) {
+      Some(_) => {
+        // 可变变量在当前环境中可见，生成赋值以使用其可变性
+        let left_value = LeftValue::Ident(var_name)
+        let new_value = self.gen_expr(var_type, true)  // 生成简单表达式
+        block.push(Assign(left_value, new_value))
+        self.mark_mutable_var_used(var_name)
+      }
+      None => () // 变量不在当前环境中可见，跳过
+    }
+  })
+  
+  block
 }
 
 /// 增强的代码块生成器，支持更复杂的代码结构
@@ -1674,7 +1807,7 @@ pub fn RandomGenerator::gen_main_func(self: Self) -> TopFuncDef {
   self.current_return_type = Unit
   
   // 生成一个较大的函数体，包含更多语句
-  let body = self.gen_block_expr(Unit)
+  let body = self.gen_block_expr_with_usage_tracking(Unit)
   
   // 恢复环境和返回类型
   self.current_return_type = old_return_type
