@@ -2,9 +2,9 @@
   "name": "Kaida-Amethyst/mbtsmith",
   "version": "0.1.0",
   "readme": "README.md",
-  "repository": "",
+  "repository": "https://github.com/Kaida-Amethyst/mbtsmith",
   "license": "Apache-2.0",
-  "keywords": [],
-  "description": "",
+  "keywords": ["MiniMoonbit2025", "Program Generator"],
+  "description": "Generate MiniMoonBit Programs randomly.",
   "source": ""
 }

@@ -155,17 +155,26 @@ pub struct RandProgGenerator {
   mut current_nested_level : Int
   mut current_lines : Int
 }
+fn RandProgGenerator::gen_assign_stmt(Self) -> Stmt
+fn RandProgGenerator::gen_block_expr(Self, Type) -> BlockExpr
 fn RandProgGenerator::gen_enum_def(Self) -> EnumDef
 fn RandProgGenerator::gen_expr(Self, Type, Bool) -> Expr
+fn RandProgGenerator::gen_expr_stmt(Self) -> Stmt
 fn RandProgGenerator::gen_if_expr(Self, Type) -> Expr?
+fn RandProgGenerator::gen_let_mut_stmt(Self) -> Stmt
+fn RandProgGenerator::gen_let_stmt(Self) -> Stmt
+fn RandProgGenerator::gen_let_tuple_stmt(Self) -> Stmt
 fn RandProgGenerator::gen_local_func_def_stmt(Self) -> Stmt
 fn RandProgGenerator::gen_main_func(Self) -> TopFuncDef
 fn RandProgGenerator::gen_match_expr(Self, Type) -> Expr?
 fn RandProgGenerator::gen_program(Self) -> Program
+fn RandProgGenerator::gen_return_stmt(Self) -> Stmt
+fn RandProgGenerator::gen_stmt(Self) -> Stmt
 fn RandProgGenerator::gen_struct_def(Self) -> StructDef
 fn RandProgGenerator::gen_top_decl(Self) -> TopDecl
 fn RandProgGenerator::gen_top_func_def(Self) -> TopFuncDef
 fn RandProgGenerator::gen_top_let(Self) -> TopLet
+fn RandProgGenerator::gen_while_stmt(Self) -> Stmt
 fn RandProgGenerator::new(seed~ : Int = ..) -> Self
 
 pub(all) enum Stmt {

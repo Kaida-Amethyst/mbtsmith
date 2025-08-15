@@ -16,6 +16,14 @@ moon update
 moon add Kaida-Amethyst/mbtsmith
 ```
 
+之后，在你需要使用`mbtsmith`的包下的`moon.pkg.json`下，添加`import`:
+
+```json
+{
+  "import" : ["Kaida-Amethyst/mbtsmith"]
+}
+```
+
 然后在代码中使用：
 
 ```moonbit

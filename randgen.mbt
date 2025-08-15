@@ -1205,7 +1205,7 @@ fn RandProgGenerator::gen_match_arms(
 }
 
 ///| 增强的语句生成器，支持更多种类的语句
-fn RandProgGenerator::gen_stmt(self : Self) -> Stmt {
+pub fn RandProgGenerator::gen_stmt(self : Self) -> Stmt {
   // 根据深度和行数目标调整语句复杂度
   if self.current_depth >= self.max_depth - 1 {
     // 在深度较大时，生成简单语句
@@ -1249,7 +1249,7 @@ fn RandProgGenerator::gen_stmt(self : Self) -> Stmt {
 }
 
 ///|
-fn RandProgGenerator::gen_let_stmt(self : Self) -> Stmt {
+pub fn RandProgGenerator::gen_let_stmt(self : Self) -> Stmt {
   let var_name = self.gen_ident()
   let var_type = self.gen_type(true)
   let init_expr = self.gen_expr(var_type, false)
@@ -1270,7 +1270,7 @@ fn RandProgGenerator::gen_let_stmt(self : Self) -> Stmt {
 }
 
 ///|
-fn RandProgGenerator::gen_let_mut_stmt(self : Self) -> Stmt {
+pub fn RandProgGenerator::gen_let_mut_stmt(self : Self) -> Stmt {
   let var_name = self.gen_ident()
   let var_type = self.gen_type(true)
   let init_expr = self.gen_expr(var_type, false)
@@ -1293,7 +1293,7 @@ fn RandProgGenerator::gen_let_mut_stmt(self : Self) -> Stmt {
 }
 
 ///| 生成元组解构let语句
-fn RandProgGenerator::gen_let_tuple_stmt(self : Self) -> Stmt {
+pub fn RandProgGenerator::gen_let_tuple_stmt(self : Self) -> Stmt {
   let tuple_size = self.rand_int(self.max_tuple_size - 1) + 2 // 至少2个元素
   let bindings = Array::new()
   let types = Array::new()
@@ -1333,7 +1333,7 @@ fn RandProgGenerator::gen_let_tuple_stmt(self : Self) -> Stmt {
 }
 
 ///|
-fn RandProgGenerator::gen_assign_stmt(self : Self) -> Stmt {
+pub fn RandProgGenerator::gen_assign_stmt(self : Self) -> Stmt {
   // 获取所有可变变量（包括父环境中的）
   let mut_vars = Array::new()
   self.collect_mutable_vars_recursive(self.mutable_vars, mut_vars)
@@ -1382,7 +1382,7 @@ fn RandProgGenerator::collect_mutable_vars_recursive(
 }
 
 ///|
-fn RandProgGenerator::gen_while_stmt(self : Self) -> Stmt {
+pub fn RandProgGenerator::gen_while_stmt(self : Self) -> Stmt {
   // 生成一个带有确定终止条件的while循环
   // 使用模式：let mut counter = 0; while counter < limit { ... counter = counter + 1 }
 
@@ -1440,7 +1440,7 @@ fn RandProgGenerator::gen_while_stmt(self : Self) -> Stmt {
 }
 
 ///|
-fn RandProgGenerator::gen_return_stmt(self : Self) -> Stmt {
+pub fn RandProgGenerator::gen_return_stmt(self : Self) -> Stmt {
   let return_expr = self.gen_expr(self.current_return_type, false)
   Return(return_expr)
 }
@@ -1502,7 +1502,7 @@ pub fn RandProgGenerator::gen_local_func_def_stmt(self : Self) -> Stmt {
 }
 
 ///|
-fn RandProgGenerator::gen_expr_stmt(self : Self) -> Stmt {
+pub fn RandProgGenerator::gen_expr_stmt(self : Self) -> Stmt {
   // 表达式语句应该只生成Unit类型或if/match表达式，避免需要let _ = 前缀的情况
   let expr = match self.rand_int(3) {
     0 =>
@@ -1822,7 +1822,7 @@ fn RandProgGenerator::gen_block_expr_with_usage_tracking(
 }
 
 ///| 增强的代码块生成器，支持更复杂的代码结构
-fn RandProgGenerator::gen_block_expr(
+pub fn RandProgGenerator::gen_block_expr(
   self : Self,
   return_type : Type,
 ) -> BlockExpr {
