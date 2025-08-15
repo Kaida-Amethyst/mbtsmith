@@ -186,7 +186,7 @@ fn RandomGenerator::gen_basic_type(self: Self) -> Type {
 
 /// 增强的类型生成器，支持更复杂的嵌套类型
 fn RandomGenerator::gen_type(self: Self, allow_complex: Bool) -> Type {
-  if self.current_nested_level >= self.max_nested_level || not(allow_complex) || self.current_depth >= self.max_depth - 1 {
+  if self.current_nested_level >= self.max_nested_level || !allow_complex || self.current_depth >= self.max_depth - 1 {
     return self.gen_basic_type()
   }
   
@@ -374,7 +374,7 @@ fn RandomGenerator::gen_var_expr(self: Self, ty: Type) -> Expr? {
 
 /// 生成复杂的数组表达式
 fn RandomGenerator::gen_array_expr(self: Self, elem_type: Type) -> Expr {
-  match self.rand_int(3) {
+  match self.rand_int(2) {
     0 => {
       // Array::make(size, init_value)
       let size_val = self.rand_int(self.max_array_size) + 1
@@ -382,19 +382,14 @@ fn RandomGenerator::gen_array_expr(self: Self, elem_type: Type) -> Expr {
       let init_expr = self.gen_expr(elem_type, true)
       IfLevelExpr(ApplyExpr(ValueExpr(ArrayMake(size_expr, init_expr))))
     }
-    1 => {
-      // [elem1, elem2, ...]
-      let size = self.rand_int(self.max_array_size) + 1
+    _ => {
+      // [elem1, elem2, ...] - 确保至少有一个元素
+      let size = self.rand_int(self.max_array_size) + 1  // 至少1个元素
       let elements = Array::new()
       for i = 0; i < size; i = i + 1 {
         elements.push(self.gen_expr(elem_type, true))
       }
       IfLevelExpr(ApplyExpr(ValueExpr(ArrayExpr(elements))))
-    }
-    _ => {
-      // 尝试从现有变量生成数组，或创建空数组
-      let empty_array = Array::new()
-      IfLevelExpr(ApplyExpr(ValueExpr(ArrayExpr(empty_array))))
     }
   }
 }
@@ -750,6 +745,7 @@ fn RandomGenerator::gen_complex_array_expr(self: Self, elem_type: Type) -> Expr 
       }
     }
     Some(2) => {
+      // 确保Array::make的第一个参数至少为1
       let size_val = self.rand_int(self.max_array_size) + 1
       let size_expr = IfLevelExpr(ApplyExpr(ValueExpr(IntExpr(size_val))))
       let init_expr = self.gen_expr(elem_type, false)
@@ -887,7 +883,7 @@ fn RandomGenerator::gen_arithmetic_expr(self: Self, ty: Type) -> Expr {
 
 /// 生成比较表达式 (返回Bool)
 fn RandomGenerator::gen_comparison_expr(self: Self) -> Expr {
-  let ty = if self.rand_bool() { Int } else { Double }
+  let ty = if self.rand_bool() { Type::Int } else { Type::Double }
   
   // 生成简单比较，避免递归复杂度
   let left = self.gen_expr(ty, true)
@@ -960,7 +956,7 @@ pub fn RandomGenerator::gen_if_expr(self: Self, expected_type: Type) -> Expr? {
   }
   
   // 生成else块
-  let else_part = if self.rand_bool() {
+  let else_part = if self.rand_bool() == true {
     // 生成else if
     match self.gen_if_expr(expected_type) {
       Some(nested_if) => {
@@ -1109,14 +1105,14 @@ fn RandomGenerator::gen_match_arms(self: Self, match_type: Type, result_type: Ty
         // 生成简单的模式
         match elem_type {
           Int => {
-            if self.rand_bool() {
+            if self.rand_bool() == true {
               patterns.push(Pattern::Number(self.rand_int(5)))
             } else {
               patterns.push(Pattern::WildCard)
             }
           }
           Bool => {
-            if self.rand_bool() {
+            if self.rand_bool() == true {
               patterns.push(Pattern::Bool(self.rand_bool()))
             } else {
               patterns.push(Pattern::WildCard)
@@ -1237,7 +1233,7 @@ fn RandomGenerator::gen_let_tuple_stmt(self: Self) -> Stmt {
   for i = 0; i < tuple_size; i = i + 1 {
     let elem_type = types[i]
     
-    if self.rand_bool() {
+    if self.rand_bool() == true {
       // 生成标识符绑定
       let var_name = self.gen_ident()
       bindings.push(Binding::Ident(var_name))
@@ -1249,7 +1245,7 @@ fn RandomGenerator::gen_let_tuple_stmt(self: Self) -> Stmt {
     }
   }
   
-  let type_annotation = if self.rand_bool() { Some(tuple_type) } else { None }
+  let type_annotation = if self.rand_bool() == true { Some(tuple_type) } else { None }
   
   LetTuple(bindings, type_annotation, tuple_expr)
 }
@@ -1441,7 +1437,7 @@ fn RandomGenerator::gen_block_expr(self: Self, return_type: Type) -> BlockExpr {
   
   // 生成返回表达式（如果需要）
   if return_type != Unit {
-    let last_expr = if self.rand_bool() {
+    let last_expr = if self.rand_bool() == true {
       self.gen_literal_expr(return_type)  // 有时生成字面量
     } else {
       self.gen_expr(return_type, false)   // 有时生成复杂表达式
