@@ -1,6 +1,6 @@
 {
   "is-main": true,
   "import": [
-    "Kaida-Amethyst/msmith/ast"
+    "Kaida-Amethyst/mbtsmith"
   ]
 }

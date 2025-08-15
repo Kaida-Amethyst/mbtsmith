@@ -1,6 +1,6 @@
 
 fn main {
-  let generator = @ast.RandomGenerator::new()
-  let program : @ast.Program = generator.gen_program()
+  let generator = @mbtsmith.RandomGenerator::new(seed=2)
+  let program : @mbtsmith.Program = generator.gen_program()
   println(program)
 }

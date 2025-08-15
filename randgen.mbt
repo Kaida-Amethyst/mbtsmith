@@ -77,8 +77,8 @@ pub struct RandomGenerator {
   mut current_lines: Int
 }
 
-pub fn RandomGenerator::new() -> RandomGenerator {
-  {
+pub fn RandomGenerator::new(seed~:Int = 0) -> RandomGenerator {
+  let g = RandomGenerator::{
     rand: @random.Rand::new(),
     max_depth: 4,               // 减少最大深度避免栈溢出
     max_stmt_count: 15,         // 适中的语句数量
@@ -101,6 +101,10 @@ pub fn RandomGenerator::new() -> RandomGenerator {
     current_nested_level: 0,
     current_lines: 0,
   }
+  for i in 0..<seed {
+    let _ = g.rand_int(100)
+  }
+  g
 }
 
 /// 辅助函数
