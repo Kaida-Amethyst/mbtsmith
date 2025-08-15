@@ -73,24 +73,6 @@ pub fn RandProgGenerator::gen_enum_def(self: Self) -> EnumDef
 pub fn RandProgGenerator::gen_main_func(self: Self) -> TopFuncDef
 ```
 
-##### 3. 生成表达式
-
-```moonbit
-pub fn RandProgGenerator::gen_expr(self: Self, ty: Type, simple: Bool) -> Expr
-pub fn RandProgGenerator::gen_if_expr(self: Self, expected_type: Type) -> Expr?
-pub fn RandProgGenerator::gen_match_expr(self: Self, expected_type: Type) -> Expr?
-```
-
-- `ty`：期望的表达式类型
-- `simple`：是否生成简单表达式（避免复杂嵌套）
-- `expected_type`：if/match表达式的期望返回类型
-
-##### 4. 生成语句
-
-```moonbit
-pub fn RandProgGenerator::gen_local_func_def_stmt(self: Self) -> Stmt
-```
-
 ### AST语法树
 
 项目提供了完整的AST语法树定义，所有Ast都实现了`Show` trait，可以直接转换为字符串输出：
@@ -150,10 +132,6 @@ fn main {
   // 生成单个函数定义
   let func_def = generator.gen_top_func_def()
   println("Function: \{func_def}")
-  
-  // 生成Int类型的表达式
-  let int_expr = generator.gen_expr(@mbtsmith.Type::Int, simple=true)
-  println("Expression: \{int_expr}")
 }
 ```
 
