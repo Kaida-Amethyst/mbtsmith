@@ -1,8 +1,176 @@
 # MiniMbt-Smith
 
-MimiMbt-Smith是一个检测MiniMoonbit编译器实现稳健性的工具，它可以根据MiniMoonbit2025标准的语法，随机生成符合语法的MiniMoonbit代码。
+MiniMbt-Smith是一个检测MiniMoonbit编译器实现稳健性的工具，它可以根据[MiniMoonbit2025标准的语法](./MiniMoonbit.g4)，随机生成符合语法的MiniMoonbit代码。
 
-MiniMoonbit2025参考语法如下：
+本工具基于csmith的思路设计，专注于生成具有一定长度和复杂度的MiniMoonbit程序，用于测试MiniMoonbit编译器的稳健性。
+
+## 安装与导入
+
+### 方法一：作为依赖导入到现有项目
+
+在你的MoonBit项目目录中运行：
+
+```bash
+# 更新依赖
+moon update
+
+# 添加mbtsmith包
+moon add Kaida-Amethyst/mbtsmith
+```
+
+然后在代码中使用：
+
+```moonbit
+fn main {
+  let generator = @mbtsmith.RandomGenerator::new()
+  let prog = generator.gen_program()
+  println(prog)
+}
+```
+
+## API接口说明
+
+### RandomGenerator类
+
+`RandomGenerator`是核心的随机程序生成器类，提供了完整的程序生成功能。
+
+#### 构造函数
+
+```moonbit
+pub fn RandomGenerator::new(seed~:Int = 0) -> RandomGenerator
+```
+
+- `seed`：可选的随机种子，用于生成可重复的随机程序。默认为0。
+
+#### 主要生成方法
+
+##### 1. 生成完整程序
+
+```moonbit
+pub fn RandomGenerator::gen_program(self: Self) -> Program
+```
+
+生成一个完整的MiniMoonbit程序，包含：
+- 多个结构体定义（3-7个）
+- 多个枚举定义（2-5个）
+- 多个顶层函数和变量声明（40-79个）
+- 一个必需的main函数
+
+##### 2. 生成顶层声明
+
+```moonbit
+pub fn RandomGenerator::gen_top_decl(self: Self) -> TopDecl
+pub fn RandomGenerator::gen_top_let(self: Self) -> TopLet
+pub fn RandomGenerator::gen_top_func_def(self: Self) -> TopFuncDef
+pub fn RandomGenerator::gen_struct_def(self: Self) -> StructDef
+pub fn RandomGenerator::gen_enum_def(self: Self) -> EnumDef
+pub fn RandomGenerator::gen_main_func(self: Self) -> TopFuncDef
+```
+
+##### 3. 生成表达式
+
+```moonbit
+pub fn RandomGenerator::gen_expr(self: Self, ty: Type, simple: Bool) -> Expr
+pub fn RandomGenerator::gen_if_expr(self: Self, expected_type: Type) -> Expr?
+pub fn RandomGenerator::gen_match_expr(self: Self, expected_type: Type) -> Expr?
+```
+
+- `ty`：期望的表达式类型
+- `simple`：是否生成简单表达式（避免复杂嵌套）
+- `expected_type`：if/match表达式的期望返回类型
+
+##### 4. 生成语句
+
+```moonbit
+pub fn RandomGenerator::gen_local_func_def_stmt(self: Self) -> Stmt
+```
+
+### AST语法树
+
+项目提供了完整的AST语法树定义，所有Ast都实现了`Show` trait，可以直接转换为字符串输出：
+
+#### 核心AST类型
+
+- `Program`：完整程序
+- `TopDecl`：顶层声明（函数、结构体、枚举、变量）
+- `Expr`：表达式
+- `Stmt`：语句
+- `Type`：类型系统
+- `Pattern`：模式匹配
+
+#### 标识符类型
+
+- `Ident`：普通标识符（变量名、函数名等）
+- `Upper`：大写标识符（类型名、枚举变体名等）
+
+## 使用示例
+
+### 基本用法
+
+```moonbit
+fn main {
+  // 创建生成器
+  let generator = @mbtsmith.RandomGenerator::new()
+  
+  // 生成完整程序
+  let program = generator.gen_program()
+  
+  // 输出程序代码
+  println(program)
+}
+```
+
+### 使用指定种子
+
+```moonbit
+fn main {
+  // 使用种子42创建生成器，相同的种子生成相同的程序，如果不给seed参数，默认为0。
+  let generator = @mbtsmith.RandomGenerator::new(seed=42)
+  let program = generator.gen_program()
+  println(program)
+}
+```
+
+### 生成特定组件
+
+```moonbit
+fn main {
+  let generator = @mbtsmith.RandomGenerator::new()
+  
+  // 生成单个结构体定义
+  let struct_def = generator.gen_struct_def()
+  println("Struct: \{struct_def}")
+  
+  // 生成单个函数定义
+  let func_def = generator.gen_top_func_def()
+  println("Function: \{func_def}")
+  
+  // 生成Int类型的表达式
+  let int_expr = generator.gen_expr(@mbtsmith.Type::Int, simple=true)
+  println("Expression: \{int_expr}")
+}
+```
+
+## 测试编译器
+
+生成的程序可以用于测试MiniMoonbit编译器：
+
+```bash
+# 生成测试程序
+moon run main > test_program.mbt
+
+# 使用MoonBit检查语法正确性，--warn-list -A消除所有警告
+moon check --warn-list -A test_program.mbt
+
+# 使用你的MiniMoonbit编译器进行测试
+your_compiler test_program.mbt
+```
+
+## 注意
+
+`mbtsmith`当前只能生成满足语法和类型定义的minimoonbit程序，但在运行阶段可能会出现问题。
+
+## MiniMoonbit2025标准语法
 
 ```antlr4
 grammar MiniMoonBit;
@@ -245,3 +413,8 @@ COMMA: ',';
 WS: [ \t\r\n]+ -> skip;
 COMMENT: '//' ~[\r\n]* -> skip;
 ```
+
+## 许可证
+
+Apache-2.0
+

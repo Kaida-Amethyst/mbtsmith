@@ -1,7 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "Kaida-Amethyst/MoonLLVM/Either"
+package "Kaida-Amethyst/mbtsmith/Either"
 
 // Values
+
+// Errors
 
 // Types and methods
 pub(all) enum Either[L, R] {
