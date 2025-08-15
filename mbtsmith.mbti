@@ -2,7 +2,6 @@
 package "Kaida-Amethyst/mbtsmith"
 
 import(
-  "Kaida-Amethyst/mbtsmith/Either"
   "moonbitlang/core/random"
 )
 
@@ -46,6 +45,20 @@ pub(all) enum CmpOp {
 }
 impl Show for CmpOp
 
+pub(all) enum Either[L, R] {
+  Left(L)
+  Right(R)
+}
+fn[L, R] Either::expect_left(Self[L, R], String) -> L
+fn[L, R] Either::expect_right(Self[L, R], String) -> R
+fn[L, R] Either::is_left(Self[L, R]) -> Bool
+fn[L, R] Either::is_right(Self[L, R]) -> Bool
+fn[L, R] Either::left(Self[L, R]) -> L?
+fn[L, R] Either::left_unwrap(Self[L, R]) -> L
+fn[L, R] Either::right(Self[L, R]) -> R?
+fn[L, R] Either::right_unwrap(Self[L, R]) -> R
+impl[L : Eq, R : Eq] Eq for Either[L, R]
+
 pub(all) struct EnumDef {
   generic_param : Upper?
   name : Upper
@@ -78,7 +91,7 @@ impl Show for Ident
 pub(all) struct IfExpr {
   cond : Expr
   then_ : BlockExpr
-  else_ : @Either.Either[IfExpr, BlockExpr]
+  else_ : Either[IfExpr, BlockExpr]
 }
 impl Show for IfExpr
 
@@ -118,7 +131,7 @@ pub struct Program {
 }
 impl Show for Program
 
-pub struct RandomGenerator {
+pub struct RandProgGenerator {
   rand : @random.Rand
   max_depth : Int
   max_stmt_count : Int
@@ -142,18 +155,18 @@ pub struct RandomGenerator {
   mut current_nested_level : Int
   mut current_lines : Int
 }
-fn RandomGenerator::gen_enum_def(Self) -> EnumDef
-fn RandomGenerator::gen_expr(Self, Type, Bool) -> Expr
-fn RandomGenerator::gen_if_expr(Self, Type) -> Expr?
-fn RandomGenerator::gen_local_func_def_stmt(Self) -> Stmt
-fn RandomGenerator::gen_main_func(Self) -> TopFuncDef
-fn RandomGenerator::gen_match_expr(Self, Type) -> Expr?
-fn RandomGenerator::gen_program(Self) -> Program
-fn RandomGenerator::gen_struct_def(Self) -> StructDef
-fn RandomGenerator::gen_top_decl(Self) -> TopDecl
-fn RandomGenerator::gen_top_func_def(Self) -> TopFuncDef
-fn RandomGenerator::gen_top_let(Self) -> TopLet
-fn RandomGenerator::new(seed~ : Int = ..) -> Self
+fn RandProgGenerator::gen_enum_def(Self) -> EnumDef
+fn RandProgGenerator::gen_expr(Self, Type, Bool) -> Expr
+fn RandProgGenerator::gen_if_expr(Self, Type) -> Expr?
+fn RandProgGenerator::gen_local_func_def_stmt(Self) -> Stmt
+fn RandProgGenerator::gen_main_func(Self) -> TopFuncDef
+fn RandProgGenerator::gen_match_expr(Self, Type) -> Expr?
+fn RandProgGenerator::gen_program(Self) -> Program
+fn RandProgGenerator::gen_struct_def(Self) -> StructDef
+fn RandProgGenerator::gen_top_decl(Self) -> TopDecl
+fn RandProgGenerator::gen_top_func_def(Self) -> TopFuncDef
+fn RandProgGenerator::gen_top_let(Self) -> TopLet
+fn RandProgGenerator::new(seed~ : Int = ..) -> Self
 
 pub(all) enum Stmt {
   LetTuple(Array[Binding], Type?, Expr)

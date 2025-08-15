@@ -6,8 +6,6 @@ MiniMbt-Smith是一个检测MiniMoonbit编译器实现稳健性的工具，它�
 
 ## 安装与导入
 
-### 方法一：作为依赖导入到现有项目
-
 在你的MoonBit项目目录中运行：
 
 ```bash
@@ -22,7 +20,7 @@ moon add Kaida-Amethyst/mbtsmith
 
 ```moonbit
 fn main {
-  let generator = @mbtsmith.RandomGenerator::new()
+  let generator = @mbtsmith.RandProgGenerator::new()
   let prog = generator.gen_program()
   println(prog)
 }
@@ -30,14 +28,14 @@ fn main {
 
 ## API接口说明
 
-### RandomGenerator类
+### RandProgGenerator类
 
-`RandomGenerator`是核心的随机程序生成器类，提供了完整的程序生成功能。
+`RandProgGenerator`是核心的随机程序生成器类，提供了完整的程序生成功能。
 
 #### 构造函数
 
 ```moonbit
-pub fn RandomGenerator::new(seed~:Int = 0) -> RandomGenerator
+pub fn RandProgGenerator::new(seed~:Int = 0) -> RandProgGenerator
 ```
 
 - `seed`：可选的随机种子，用于生成可重复的随机程序。默认为0。
@@ -47,7 +45,7 @@ pub fn RandomGenerator::new(seed~:Int = 0) -> RandomGenerator
 ##### 1. 生成完整程序
 
 ```moonbit
-pub fn RandomGenerator::gen_program(self: Self) -> Program
+pub fn RandProgGenerator::gen_program(self: Self) -> Program
 ```
 
 生成一个完整的MiniMoonbit程序，包含：
@@ -59,20 +57,20 @@ pub fn RandomGenerator::gen_program(self: Self) -> Program
 ##### 2. 生成顶层声明
 
 ```moonbit
-pub fn RandomGenerator::gen_top_decl(self: Self) -> TopDecl
-pub fn RandomGenerator::gen_top_let(self: Self) -> TopLet
-pub fn RandomGenerator::gen_top_func_def(self: Self) -> TopFuncDef
-pub fn RandomGenerator::gen_struct_def(self: Self) -> StructDef
-pub fn RandomGenerator::gen_enum_def(self: Self) -> EnumDef
-pub fn RandomGenerator::gen_main_func(self: Self) -> TopFuncDef
+pub fn RandProgGenerator::gen_top_decl(self: Self) -> TopDecl
+pub fn RandProgGenerator::gen_top_let(self: Self) -> TopLet
+pub fn RandProgGenerator::gen_top_func_def(self: Self) -> TopFuncDef
+pub fn RandProgGenerator::gen_struct_def(self: Self) -> StructDef
+pub fn RandProgGenerator::gen_enum_def(self: Self) -> EnumDef
+pub fn RandProgGenerator::gen_main_func(self: Self) -> TopFuncDef
 ```
 
 ##### 3. 生成表达式
 
 ```moonbit
-pub fn RandomGenerator::gen_expr(self: Self, ty: Type, simple: Bool) -> Expr
-pub fn RandomGenerator::gen_if_expr(self: Self, expected_type: Type) -> Expr?
-pub fn RandomGenerator::gen_match_expr(self: Self, expected_type: Type) -> Expr?
+pub fn RandProgGenerator::gen_expr(self: Self, ty: Type, simple: Bool) -> Expr
+pub fn RandProgGenerator::gen_if_expr(self: Self, expected_type: Type) -> Expr?
+pub fn RandProgGenerator::gen_match_expr(self: Self, expected_type: Type) -> Expr?
 ```
 
 - `ty`：期望的表达式类型
@@ -82,7 +80,7 @@ pub fn RandomGenerator::gen_match_expr(self: Self, expected_type: Type) -> Expr?
 ##### 4. 生成语句
 
 ```moonbit
-pub fn RandomGenerator::gen_local_func_def_stmt(self: Self) -> Stmt
+pub fn RandProgGenerator::gen_local_func_def_stmt(self: Self) -> Stmt
 ```
 
 ### AST语法树
@@ -110,7 +108,7 @@ pub fn RandomGenerator::gen_local_func_def_stmt(self: Self) -> Stmt
 ```moonbit
 fn main {
   // 创建生成器
-  let generator = @mbtsmith.RandomGenerator::new()
+  let generator = @mbtsmith.RandProgGenerator::new()
   
   // 生成完整程序
   let program = generator.gen_program()
@@ -125,7 +123,7 @@ fn main {
 ```moonbit
 fn main {
   // 使用种子42创建生成器，相同的种子生成相同的程序，如果不给seed参数，默认为0。
-  let generator = @mbtsmith.RandomGenerator::new(seed=42)
+  let generator = @mbtsmith.RandProgGenerator::new(seed=42)
   let program = generator.gen_program()
   println(program)
 }
@@ -135,7 +133,7 @@ fn main {
 
 ```moonbit
 fn main {
-  let generator = @mbtsmith.RandomGenerator::new()
+  let generator = @mbtsmith.RandProgGenerator::new()
   
   // 生成单个结构体定义
   let struct_def = generator.gen_struct_def()

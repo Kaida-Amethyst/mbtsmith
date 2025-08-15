@@ -47,7 +47,7 @@ fn[K, V : Eq] Env::collect_vars_of_type(
 }
 
 ///| 生成器状态和配置
-pub struct RandomGenerator {
+pub struct RandProgGenerator {
   rand : @random.Rand
 
   // 增强的配置参数，支持生成更复杂的程序
@@ -87,8 +87,8 @@ pub struct RandomGenerator {
 }
 
 ///|
-pub fn RandomGenerator::new(seed~ : Int = 0) -> RandomGenerator {
-  let g = RandomGenerator::{
+pub fn RandProgGenerator::new(seed~ : Int = 0) -> RandProgGenerator {
+  let g = RandProgGenerator::{
     rand: @random.Rand::new(),
     max_depth: 4, // 减少最大深度避免栈溢出
     max_stmt_count: 15, // 适中的语句数量
@@ -120,7 +120,7 @@ pub fn RandomGenerator::new(seed~ : Int = 0) -> RandomGenerator {
 }
 
 ///| 辅助函数
-fn RandomGenerator::rand_int(self : Self, max : Int) -> Int {
+fn RandProgGenerator::rand_int(self : Self, max : Int) -> Int {
   if max <= 0 {
     return 0
   }
@@ -128,17 +128,17 @@ fn RandomGenerator::rand_int(self : Self, max : Int) -> Int {
 }
 
 ///|
-fn RandomGenerator::rand_bool(self : Self) -> Bool {
+fn RandProgGenerator::rand_bool(self : Self) -> Bool {
   self.rand_int(2) == 0
 }
 
 ///|
-fn RandomGenerator::rand_double(self : Self) -> Double {
+fn RandProgGenerator::rand_double(self : Self) -> Double {
   self.rand.double() * 1000.0 // 扩大范围，生成更多样的浮点数
 }
 
 ///|
-fn[T] RandomGenerator::choice(self : Self, choices : Array[T]) -> T? {
+fn[T] RandProgGenerator::choice(self : Self, choices : Array[T]) -> T? {
   if choices.is_empty() {
     None
   } else {
@@ -147,7 +147,7 @@ fn[T] RandomGenerator::choice(self : Self, choices : Array[T]) -> T? {
 }
 
 ///|
-fn[T] RandomGenerator::weighted_choice(
+fn[T] RandProgGenerator::weighted_choice(
   self : Self,
   choices : Array[(T, Int)],
 ) -> T? {
@@ -172,7 +172,7 @@ fn[T] RandomGenerator::weighted_choice(
 }
 
 ///| 生成标识符
-fn RandomGenerator::gen_ident(self : Self) -> Ident {
+fn RandProgGenerator::gen_ident(self : Self) -> Ident {
   let names = [
     "x", "y", "z", "a", "b", "c", "value", "temp", "result", "data", "item", "elem",
     "i", "j", "k", "count", "sum", "index", "flag", "status", "info", "node", "next",
@@ -185,7 +185,7 @@ fn RandomGenerator::gen_ident(self : Self) -> Ident {
 }
 
 ///|
-fn RandomGenerator::gen_upper(self : Self) -> Upper {
+fn RandProgGenerator::gen_upper(self : Self) -> Upper {
   let names = [
     "Point", "Node", "Item", "Data", "Result", "Option", "List", "Tree", "Value",
     "Container", "Record", "Entry", "Element", "Structure", "Entity", "Object", "Instance",
@@ -198,7 +198,7 @@ fn RandomGenerator::gen_upper(self : Self) -> Upper {
 }
 
 ///| 生成基础类型
-fn RandomGenerator::gen_basic_type(self : Self) -> Type {
+fn RandProgGenerator::gen_basic_type(self : Self) -> Type {
   match self.rand_int(4) {
     0 => Unit
     1 => Bool
@@ -208,7 +208,7 @@ fn RandomGenerator::gen_basic_type(self : Self) -> Type {
 }
 
 ///| 增强的类型生成器，支持更复杂的嵌套类型
-fn RandomGenerator::gen_type(self : Self, allow_complex : Bool) -> Type {
+fn RandProgGenerator::gen_type(self : Self, allow_complex : Bool) -> Type {
   if self.current_nested_level >= self.max_nested_level ||
     !allow_complex ||
     self.current_depth >= self.max_depth - 1 {
@@ -234,7 +234,7 @@ fn RandomGenerator::gen_type(self : Self, allow_complex : Bool) -> Type {
 }
 
 ///|
-fn RandomGenerator::gen_array_type(self : Self) -> Type {
+fn RandProgGenerator::gen_array_type(self : Self) -> Type {
   self.current_nested_level = self.current_nested_level + 1
   let element_type = self.gen_type(true)
   self.current_nested_level = self.current_nested_level - 1
@@ -242,7 +242,7 @@ fn RandomGenerator::gen_array_type(self : Self) -> Type {
 }
 
 ///|
-fn RandomGenerator::gen_tuple_type(self : Self) -> Type {
+fn RandProgGenerator::gen_tuple_type(self : Self) -> Type {
   let size = self.rand_int(self.max_tuple_size - 1) + 2 // 至少2个元素
   let types = Array::new()
   self.current_nested_level = self.current_nested_level + 1
@@ -256,7 +256,7 @@ fn RandomGenerator::gen_tuple_type(self : Self) -> Type {
 }
 
 ///|
-fn RandomGenerator::gen_custom_struct_type(self : Self) -> Type {
+fn RandProgGenerator::gen_custom_struct_type(self : Self) -> Type {
   // 从已定义的结构体中随机选择一个
   let available_structs = Array::new()
   self.struct_defs.each(fn(name, _) { available_structs.push(name) })
@@ -271,7 +271,7 @@ fn RandomGenerator::gen_custom_struct_type(self : Self) -> Type {
 }
 
 ///|
-fn RandomGenerator::gen_custom_enum_type(self : Self) -> Type {
+fn RandProgGenerator::gen_custom_enum_type(self : Self) -> Type {
   // 从已定义的枚举中随机选择一个
   let available_enums = Array::new()
   self.enum_defs.each(fn(name, _) { available_enums.push(name) })
@@ -286,7 +286,7 @@ fn RandomGenerator::gen_custom_enum_type(self : Self) -> Type {
 }
 
 ///| 查找指定类型的所有变量
-fn RandomGenerator::find_all_vars_of_type(
+fn RandProgGenerator::find_all_vars_of_type(
   self : Self,
   target_type : Type,
 ) -> Array[Ident] {
@@ -294,7 +294,7 @@ fn RandomGenerator::find_all_vars_of_type(
 }
 
 ///| 标记可变变量已被使用（从未使用列表中移除）
-fn RandomGenerator::mark_mutable_var_used(
+fn RandProgGenerator::mark_mutable_var_used(
   self : Self,
   var_name : Ident,
 ) -> Unit {
@@ -309,7 +309,7 @@ fn RandomGenerator::mark_mutable_var_used(
 }
 
 ///| 记录变量定义
-fn RandomGenerator::record_var_definition(
+fn RandProgGenerator::record_var_definition(
   self : Self,
   var_name : Ident,
   var_type : Type,
@@ -329,7 +329,7 @@ fn RandomGenerator::record_var_definition(
 }
 
 ///| 标记变量已使用
-fn RandomGenerator::mark_var_used(self : Self, var_name : Ident) -> Unit {
+fn RandProgGenerator::mark_var_used(self : Self, var_name : Ident) -> Unit {
   self.used_vars = {
     let new_map = Map::new()
     self.used_vars.each(fn(k, v) { new_map.set(k, v) })
@@ -339,7 +339,7 @@ fn RandomGenerator::mark_var_used(self : Self, var_name : Ident) -> Unit {
 }
 
 ///| 安全地生成对未使用可变变量的强制赋值语句
-fn RandomGenerator::gen_safe_force_assign_unused_mutables(
+fn RandProgGenerator::gen_safe_force_assign_unused_mutables(
   self : Self,
 ) -> Array[Stmt] {
   let assignments = Array::new()
@@ -361,7 +361,7 @@ fn RandomGenerator::gen_safe_force_assign_unused_mutables(
 }
 
 ///| 生成复杂的字面量表达式
-fn RandomGenerator::gen_literal_expr(self : Self, ty : Type) -> Expr {
+fn RandProgGenerator::gen_literal_expr(self : Self, ty : Type) -> Expr {
   match ty {
     Unit => IfLevelExpr(ApplyExpr(ValueExpr(UnitExpr)))
     Bool => IfLevelExpr(ApplyExpr(ValueExpr(BoolExpr(self.rand_bool()))))
@@ -388,7 +388,7 @@ fn RandomGenerator::gen_literal_expr(self : Self, ty : Type) -> Expr {
 }
 
 ///| 生成结构体构造表达式
-fn RandomGenerator::gen_struct_construct_expr(
+fn RandProgGenerator::gen_struct_construct_expr(
   self : Self,
   name : Upper,
   fields : Array[(Ident, Type)],
@@ -403,7 +403,7 @@ fn RandomGenerator::gen_struct_construct_expr(
 }
 
 ///| 生成枚举构造表达式
-fn RandomGenerator::gen_enum_construct_expr(
+fn RandProgGenerator::gen_enum_construct_expr(
   self : Self,
   name : Upper,
   variants : Array[(Upper, Array[Type])],
@@ -425,7 +425,7 @@ fn RandomGenerator::gen_enum_construct_expr(
 }
 
 ///| 生成变量引用表达式 - 确保引用的变量在当前环境中确实存在
-fn RandomGenerator::gen_var_expr(self : Self, ty : Type) -> Expr? {
+fn RandProgGenerator::gen_var_expr(self : Self, ty : Type) -> Expr? {
   // 首先查找当前环境中指定类型的变量
   let available_vars = self.var_env.collect_vars_of_type(ty)
   if available_vars.is_empty() {
@@ -455,7 +455,7 @@ fn RandomGenerator::gen_var_expr(self : Self, ty : Type) -> Expr? {
 }
 
 ///| 生成复杂的数组表达式
-fn RandomGenerator::gen_array_expr(self : Self, elem_type : Type) -> Expr {
+fn RandProgGenerator::gen_array_expr(self : Self, elem_type : Type) -> Expr {
   match self.rand_int(2) {
     0 => {
       // Array::make(size, init_value)
@@ -477,7 +477,7 @@ fn RandomGenerator::gen_array_expr(self : Self, elem_type : Type) -> Expr {
 }
 
 ///| 生成复杂的元组表达式
-fn RandomGenerator::gen_tuple_expr(
+fn RandProgGenerator::gen_tuple_expr(
   self : Self,
   elem_types : Array[Type],
 ) -> Expr {
@@ -489,7 +489,7 @@ fn RandomGenerator::gen_tuple_expr(
 }
 
 ///| 生成函数调用表达式 - 确保只调用确实存在且可访问的函数
-fn RandomGenerator::gen_function_call_expr(
+fn RandProgGenerator::gen_function_call_expr(
   self : Self,
   expected_return_type : Type,
 ) -> Expr? {
@@ -534,7 +534,7 @@ fn RandomGenerator::gen_function_call_expr(
 }
 
 ///| 生成数组访问表达式
-fn RandomGenerator::gen_array_access_expr(
+fn RandProgGenerator::gen_array_access_expr(
   self : Self,
   elem_type : Type,
 ) -> Expr? {
@@ -551,7 +551,7 @@ fn RandomGenerator::gen_array_access_expr(
 }
 
 ///| 生成点访问表达式（结构体字段访问）
-fn RandomGenerator::gen_dot_access_expr(
+fn RandProgGenerator::gen_dot_access_expr(
   self : Self,
   expected_type : Type,
 ) -> Expr? {
@@ -579,7 +579,7 @@ fn RandomGenerator::gen_dot_access_expr(
 }
 
 ///| 增强的表达式生成器，支持更复杂的表达式结构
-pub fn RandomGenerator::gen_expr(self : Self, ty : Type, simple : Bool) -> Expr {
+pub fn RandProgGenerator::gen_expr(self : Self, ty : Type, simple : Bool) -> Expr {
   if self.current_depth >= self.max_depth || simple {
     // 在最大深度或要求简单表达式时，优先生成字面量或变量引用
     let choices = [
@@ -626,7 +626,7 @@ pub fn RandomGenerator::gen_expr(self : Self, ty : Type, simple : Bool) -> Expr 
 }
 
 ///| 生成复杂的Unit表达式
-fn RandomGenerator::gen_complex_unit_expr(self : Self) -> Expr {
+fn RandProgGenerator::gen_complex_unit_expr(self : Self) -> Expr {
   let choices = [
     (0, 40), // 字面量Unit
     (1, 20), // 变量引用
@@ -661,7 +661,7 @@ fn RandomGenerator::gen_complex_unit_expr(self : Self) -> Expr {
 }
 
 ///| 生成复杂的Bool表达式
-fn RandomGenerator::gen_complex_bool_expr(self : Self) -> Expr {
+fn RandProgGenerator::gen_complex_bool_expr(self : Self) -> Expr {
   let choices = [
     (0, 20), // 字面量Bool
     (1, 18), // 变量引用
@@ -699,7 +699,7 @@ fn RandomGenerator::gen_complex_bool_expr(self : Self) -> Expr {
 }
 
 ///| 生成复杂的Int表达式
-fn RandomGenerator::gen_complex_int_expr(self : Self) -> Expr {
+fn RandProgGenerator::gen_complex_int_expr(self : Self) -> Expr {
   let choices = [
     (0, 35), // 字面量Int
     (1, 30), // 变量引用
@@ -748,7 +748,7 @@ fn RandomGenerator::gen_complex_int_expr(self : Self) -> Expr {
 }
 
 ///| 生成复杂的Double表达式
-fn RandomGenerator::gen_complex_double_expr(self : Self) -> Expr {
+fn RandProgGenerator::gen_complex_double_expr(self : Self) -> Expr {
   let choices = [
     (0, 25), // 字面量Double
     (1, 20), // 变量引用
@@ -797,7 +797,7 @@ fn RandomGenerator::gen_complex_double_expr(self : Self) -> Expr {
 }
 
 ///| 生成复杂的Array表达式
-fn RandomGenerator::gen_complex_array_expr(
+fn RandProgGenerator::gen_complex_array_expr(
   self : Self,
   elem_type : Type,
 ) -> Expr {
@@ -837,7 +837,7 @@ fn RandomGenerator::gen_complex_array_expr(
 }
 
 ///| 生成复杂的Tuple表达式
-fn RandomGenerator::gen_complex_tuple_expr(
+fn RandProgGenerator::gen_complex_tuple_expr(
   self : Self,
   elem_types : Array[Type],
 ) -> Expr {
@@ -869,7 +869,7 @@ fn RandomGenerator::gen_complex_tuple_expr(
 }
 
 ///| 生成复杂的Struct表达式
-fn RandomGenerator::gen_complex_struct_expr(
+fn RandProgGenerator::gen_complex_struct_expr(
   self : Self,
   name : Upper,
   fields : Array[(Ident, Type)],
@@ -902,7 +902,7 @@ fn RandomGenerator::gen_complex_struct_expr(
 }
 
 ///| 生成复杂的Enum表达式
-fn RandomGenerator::gen_complex_enum_expr(
+fn RandProgGenerator::gen_complex_enum_expr(
   self : Self,
   name : Upper,
   variants : Array[(Upper, Array[Type])],
@@ -935,7 +935,7 @@ fn RandomGenerator::gen_complex_enum_expr(
 }
 
 ///| 生成算术表达式 (仅适用于Int和Double)
-fn RandomGenerator::gen_arithmetic_expr(self : Self, ty : Type) -> Expr {
+fn RandProgGenerator::gen_arithmetic_expr(self : Self, ty : Type) -> Expr {
   // 始终生成简单的双操作数表达式，避免无限递归
   let left = self.gen_expr(ty, true)
   let right = self.gen_expr(ty, true)
@@ -949,7 +949,7 @@ fn RandomGenerator::gen_arithmetic_expr(self : Self, ty : Type) -> Expr {
 }
 
 ///| 生成比较表达式 (返回Bool)
-fn RandomGenerator::gen_comparison_expr(self : Self) -> Expr {
+fn RandProgGenerator::gen_comparison_expr(self : Self) -> Expr {
   let ty = if self.rand_bool() { Type::Int } else { Type::Double }
 
   // 生成简单比较，避免递归复杂度
@@ -959,7 +959,7 @@ fn RandomGenerator::gen_comparison_expr(self : Self) -> Expr {
 }
 
 ///|
-fn RandomGenerator::make_comparison(
+fn RandProgGenerator::make_comparison(
   self : Self,
   left : Expr,
   right : Expr,
@@ -976,7 +976,7 @@ fn RandomGenerator::make_comparison(
 }
 
 ///| 生成逻辑表达式 (返回Bool)
-fn RandomGenerator::gen_logical_expr(self : Self) -> Expr {
+fn RandProgGenerator::gen_logical_expr(self : Self) -> Expr {
   match self.rand_int(2) {
     0 => {
       // AND 表达式
@@ -994,7 +994,7 @@ fn RandomGenerator::gen_logical_expr(self : Self) -> Expr {
 }
 
 ///| 生成if表达式
-pub fn RandomGenerator::gen_if_expr(self : Self, expected_type : Type) -> Expr? {
+pub fn RandProgGenerator::gen_if_expr(self : Self, expected_type : Type) -> Expr? {
   // 防止过深的嵌套
   if self.current_depth >= self.max_depth - 1 {
     return None
@@ -1060,7 +1060,7 @@ pub fn RandomGenerator::gen_if_expr(self : Self, expected_type : Type) -> Expr? 
 }
 
 ///| 生成match表达式
-pub fn RandomGenerator::gen_match_expr(
+pub fn RandProgGenerator::gen_match_expr(
   self : Self,
   expected_type : Type,
 ) -> Expr? {
@@ -1120,7 +1120,7 @@ pub fn RandomGenerator::gen_match_expr(
 }
 
 ///| 生成匹配分支
-fn RandomGenerator::gen_match_arms(
+fn RandProgGenerator::gen_match_arms(
   self : Self,
   match_type : Type,
   result_type : Type,
@@ -1205,7 +1205,7 @@ fn RandomGenerator::gen_match_arms(
 }
 
 ///| 增强的语句生成器，支持更多种类的语句
-fn RandomGenerator::gen_stmt(self : Self) -> Stmt {
+fn RandProgGenerator::gen_stmt(self : Self) -> Stmt {
   // 根据深度和行数目标调整语句复杂度
   if self.current_depth >= self.max_depth - 1 {
     // 在深度较大时，生成简单语句
@@ -1249,7 +1249,7 @@ fn RandomGenerator::gen_stmt(self : Self) -> Stmt {
 }
 
 ///|
-fn RandomGenerator::gen_let_stmt(self : Self) -> Stmt {
+fn RandProgGenerator::gen_let_stmt(self : Self) -> Stmt {
   let var_name = self.gen_ident()
   let var_type = self.gen_type(true)
   let init_expr = self.gen_expr(var_type, false)
@@ -1270,7 +1270,7 @@ fn RandomGenerator::gen_let_stmt(self : Self) -> Stmt {
 }
 
 ///|
-fn RandomGenerator::gen_let_mut_stmt(self : Self) -> Stmt {
+fn RandProgGenerator::gen_let_mut_stmt(self : Self) -> Stmt {
   let var_name = self.gen_ident()
   let var_type = self.gen_type(true)
   let init_expr = self.gen_expr(var_type, false)
@@ -1293,7 +1293,7 @@ fn RandomGenerator::gen_let_mut_stmt(self : Self) -> Stmt {
 }
 
 ///| 生成元组解构let语句
-fn RandomGenerator::gen_let_tuple_stmt(self : Self) -> Stmt {
+fn RandProgGenerator::gen_let_tuple_stmt(self : Self) -> Stmt {
   let tuple_size = self.rand_int(self.max_tuple_size - 1) + 2 // 至少2个元素
   let bindings = Array::new()
   let types = Array::new()
@@ -1333,7 +1333,7 @@ fn RandomGenerator::gen_let_tuple_stmt(self : Self) -> Stmt {
 }
 
 ///|
-fn RandomGenerator::gen_assign_stmt(self : Self) -> Stmt {
+fn RandProgGenerator::gen_assign_stmt(self : Self) -> Stmt {
   // 获取所有可变变量（包括父环境中的）
   let mut_vars = Array::new()
   self.collect_mutable_vars_recursive(self.mutable_vars, mut_vars)
@@ -1363,7 +1363,7 @@ fn RandomGenerator::gen_assign_stmt(self : Self) -> Stmt {
 // 辅助函数：递归收集可变变量
 
 ///|
-fn RandomGenerator::collect_mutable_vars_recursive(
+fn RandProgGenerator::collect_mutable_vars_recursive(
   self : Self,
   env : Env[Ident, Type],
   result : Array[(Ident, Type)],
@@ -1382,7 +1382,7 @@ fn RandomGenerator::collect_mutable_vars_recursive(
 }
 
 ///|
-fn RandomGenerator::gen_while_stmt(self : Self) -> Stmt {
+fn RandProgGenerator::gen_while_stmt(self : Self) -> Stmt {
   // 生成一个带有确定终止条件的while循环
   // 使用模式：let mut counter = 0; while counter < limit { ... counter = counter + 1 }
 
@@ -1440,13 +1440,13 @@ fn RandomGenerator::gen_while_stmt(self : Self) -> Stmt {
 }
 
 ///|
-fn RandomGenerator::gen_return_stmt(self : Self) -> Stmt {
+fn RandProgGenerator::gen_return_stmt(self : Self) -> Stmt {
   let return_expr = self.gen_expr(self.current_return_type, false)
   Return(return_expr)
 }
 
 ///|
-pub fn RandomGenerator::gen_local_func_def_stmt(self : Self) -> Stmt {
+pub fn RandProgGenerator::gen_local_func_def_stmt(self : Self) -> Stmt {
   // 减少局部函数的生成，因为它们容易引起作用域问题
   if self.current_depth >= self.max_depth - 2 {
     return self.gen_let_stmt() // 在深层嵌套中不生成局部函数
@@ -1502,7 +1502,7 @@ pub fn RandomGenerator::gen_local_func_def_stmt(self : Self) -> Stmt {
 }
 
 ///|
-fn RandomGenerator::gen_expr_stmt(self : Self) -> Stmt {
+fn RandProgGenerator::gen_expr_stmt(self : Self) -> Stmt {
   // 表达式语句应该只生成Unit类型或if/match表达式，避免需要let _ = 前缀的情况
   let expr = match self.rand_int(3) {
     0 =>
@@ -1525,7 +1525,7 @@ fn RandomGenerator::gen_expr_stmt(self : Self) -> Stmt {
 }
 
 ///| 生成对未使用类型的构造和使用语句
-fn RandomGenerator::gen_force_use_unused_types(
+fn RandProgGenerator::gen_force_use_unused_types(
   self : Self,
   block : BlockExpr,
 ) -> Unit {
@@ -1698,7 +1698,7 @@ fn RandomGenerator::gen_force_use_unused_types(
 }
 
 ///| 生成代码块并在结束时处理未使用变量
-fn RandomGenerator::gen_block_expr_with_usage_tracking(
+fn RandProgGenerator::gen_block_expr_with_usage_tracking(
   self : Self,
   return_type : Type,
 ) -> BlockExpr {
@@ -1822,7 +1822,7 @@ fn RandomGenerator::gen_block_expr_with_usage_tracking(
 }
 
 ///| 增强的代码块生成器，支持更复杂的代码结构
-fn RandomGenerator::gen_block_expr(
+fn RandProgGenerator::gen_block_expr(
   self : Self,
   return_type : Type,
 ) -> BlockExpr {
@@ -1900,7 +1900,7 @@ fn RandomGenerator::gen_block_expr(
 }
 
 ///| 估算语句的行数（用于控制总行数）
-fn RandomGenerator::estimate_stmt_lines(self : Self, stmt : Stmt) -> Int {
+fn RandProgGenerator::estimate_stmt_lines(self : Self, stmt : Stmt) -> Int {
   match stmt {
     Let(_, _, _) => 1
     LetMut(_, _, _) => 1
@@ -1915,7 +1915,7 @@ fn RandomGenerator::estimate_stmt_lines(self : Self, stmt : Stmt) -> Int {
 }
 
 ///| 估算代码块的行数
-fn RandomGenerator::estimate_block_lines(self : Self, block : BlockExpr) -> Int {
+fn RandProgGenerator::estimate_block_lines(self : Self, block : BlockExpr) -> Int {
   let lines = 2 // { 和 }
   let stmt_lines = block.stmts.fold(init=0, fn(acc, stmt) {
     acc + self.estimate_stmt_lines(stmt)
@@ -1928,7 +1928,7 @@ fn RandomGenerator::estimate_block_lines(self : Self, block : BlockExpr) -> Int 
 }
 
 ///| 增强的顶层定义生成器
-pub fn RandomGenerator::gen_top_let(self : Self) -> TopLet {
+pub fn RandProgGenerator::gen_top_let(self : Self) -> TopLet {
   let name = self.gen_ident()
   let ty = self.gen_type(true)
   let value = self.gen_expr(ty, false)
@@ -1942,7 +1942,7 @@ pub fn RandomGenerator::gen_top_let(self : Self) -> TopLet {
 }
 
 ///|
-pub fn RandomGenerator::gen_struct_def(self : Self) -> StructDef {
+pub fn RandProgGenerator::gen_struct_def(self : Self) -> StructDef {
   let name = self.gen_upper()
   let field_count = self.rand_int(5) + 1 // 1-5个字段，减少复杂度
   let fields = Array::new()
@@ -1978,7 +1978,7 @@ pub fn RandomGenerator::gen_struct_def(self : Self) -> StructDef {
 }
 
 ///|
-pub fn RandomGenerator::gen_enum_def(self : Self) -> EnumDef {
+pub fn RandProgGenerator::gen_enum_def(self : Self) -> EnumDef {
   let name = self.gen_upper()
   let variant_count = self.rand_int(4) + 1 // 1-4个变体，减少复杂度
   let variants = Array::new()
@@ -2008,7 +2008,7 @@ pub fn RandomGenerator::gen_enum_def(self : Self) -> EnumDef {
 }
 
 ///|
-pub fn RandomGenerator::gen_top_func_def(self : Self) -> TopFuncDef {
+pub fn RandProgGenerator::gen_top_func_def(self : Self) -> TopFuncDef {
   let name = self.gen_ident()
   let param_count = self.rand_int(self.max_func_params)
   let params = Array::new()
@@ -2053,7 +2053,7 @@ pub fn RandomGenerator::gen_top_func_def(self : Self) -> TopFuncDef {
 }
 
 ///| 生成main函数（不带参数和泛型参数）
-pub fn RandomGenerator::gen_main_func(self : Self) -> TopFuncDef {
+pub fn RandProgGenerator::gen_main_func(self : Self) -> TopFuncDef {
   let name : Ident = Ident("main")
   let params : Array[(Ident, Type)] = [] // main函数没有参数
   let ret_ty = Unit // main函数返回Unit
@@ -2077,7 +2077,7 @@ pub fn RandomGenerator::gen_main_func(self : Self) -> TopFuncDef {
 }
 
 ///|
-pub fn RandomGenerator::gen_top_decl(self : Self) -> TopDecl {
+pub fn RandProgGenerator::gen_top_decl(self : Self) -> TopDecl {
   let choices = [
     (0, 30), // 顶层let
     (1, 25), // 结构体定义  
@@ -2094,7 +2094,7 @@ pub fn RandomGenerator::gen_top_decl(self : Self) -> TopDecl {
 }
 
 ///| 程序生成器，确保包含main函数并生成合理长度的程序
-pub fn RandomGenerator::gen_program(self : Self) -> Program {
+pub fn RandProgGenerator::gen_program(self : Self) -> Program {
   let top_decls = Array::new()
 
   // 首先生成适量基础类型定义
