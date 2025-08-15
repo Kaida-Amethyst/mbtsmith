@@ -1,6 +1,6 @@
 # MiniMbt-Smith
 
-MiniMbt-Smith是一个检测MiniMoonbit编译器实现稳健性的工具，它可以根据[MiniMoonbit2025标准的语法](./MiniMoonbit.g4)，随机生成符合语法的MiniMoonbit代码。
+MiniMbt-Smith是一个检测MiniMoonbit编译器实现稳健性的工具，它可以根据MiniMoonbit2025标准的语法，随机生成符合语法的MiniMoonbit代码。
 
 本工具基于csmith的思路设计，专注于生成具有一定长度和复杂度的MiniMoonbit程序，用于测试MiniMoonbit编译器的稳健性。
 
