@@ -712,7 +712,17 @@ pub impl Show for Stmt with output(self, logger) {
       logger.write_string("return \{expr};");
     }
     ExprStmt(expr) => {
-      logger.write_string("let _ = \{expr};");
+      //logger.write_string("let _ = \{expr};");
+      let prefix = match expr {
+        IfLevelExpr(iexpr) => {
+          match iexpr {
+            ApplyExpr(_) => "let _ = " 
+            _ => ""
+          }
+        }
+        _ => "let _ = "
+      }
+      logger.write_string("\{prefix}\{expr};");
     }
   }
 }

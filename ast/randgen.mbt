@@ -551,8 +551,8 @@ fn RandomGenerator::gen_complex_unit_expr(self: Self) -> Expr {
       }
     }
     Some(3) => {
-      // 生成一个包含其他表达式的组合表达式
-      let inner_expr = self.gen_expr(Int, true)
+      // 生成一个包含Unit表达式的组合表达式
+      let inner_expr = self.gen_expr(Unit, true)
       IfLevelExpr(ApplyExpr(ValueExpr(GroupExpr(inner_expr))))
     }
     _ => self.gen_literal_expr(Unit)
