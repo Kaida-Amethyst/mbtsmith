@@ -30,7 +30,7 @@ pub struct BlockExpr {
   mut last_expr : Expr?
   parent : BlockExpr?
 }
-fn BlockExpr::new(nested_level~ : Int = .., parent~ : Self? = .., last_expr~ : Expr? = ..) -> Self
+fn BlockExpr::new(nested_level? : Int, parent? : Self?, last_expr? : Expr?) -> Self
 fn BlockExpr::push(Self, Stmt) -> Unit
 fn BlockExpr::set_last_expr(Self, Expr) -> Unit
 impl Show for BlockExpr
@@ -82,7 +82,7 @@ pub(all) enum Expr {
 }
 impl Show for Expr
 
-pub(all) type Ident String
+pub(all) struct Ident(String)
 fn Ident::inner(Self) -> String
 impl Eq for Ident
 impl Hash for Ident
@@ -174,7 +174,7 @@ fn RandProgGenerator::gen_top_decl(Self) -> TopDecl
 fn RandProgGenerator::gen_top_func_def(Self) -> TopFuncDef
 fn RandProgGenerator::gen_top_let(Self) -> TopLet
 fn RandProgGenerator::gen_while_stmt(Self) -> Stmt
-fn RandProgGenerator::new(seed~ : Int = ..) -> Self
+fn RandProgGenerator::new(seed? : Int?) -> Self
 
 pub(all) enum Stmt {
   LetTuple(Array[Binding], Type?, Expr)
@@ -236,7 +236,7 @@ pub(all) enum Type {
 impl Eq for Type
 impl Show for Type
 
-pub(all) type Upper String
+pub(all) struct Upper(String)
 fn Upper::inner(Self) -> String
 impl Eq for Upper
 impl Hash for Upper
