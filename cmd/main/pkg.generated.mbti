@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "Kaida-Amethyst/mbtsmith/main"
+package "Kaida-Amethyst/mbtsmith/cmd/main"
 
 // Values
 
